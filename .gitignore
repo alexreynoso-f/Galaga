@@ -23,3 +23,6 @@ Makefile
 .RData
 .Rproj.user
 *.Rproj
+
+# Generated plots
+plots/
