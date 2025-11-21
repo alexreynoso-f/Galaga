@@ -2,8 +2,8 @@
 #include "Player.h"
 #include <memory>
 
-static constexpr float TARGET_PLAYER_W = 80.f; // ancho objetivo en px (ajusta si quieres)
-static constexpr float TARGET_PLAYER_H = 80.f; // alto objetivo en px
+static constexpr float TARGET_PLAYER_W = 80.f; // ancho
+static constexpr float TARGET_PLAYER_H = 80.f; // alto
 
 Player::Player(const sf::Texture* texture, const sf::Vector2f& startPos)
     : position_(startPos)
@@ -18,16 +18,10 @@ Player::Player(const sf::Texture* texture, const sf::Vector2f& startPos)
         float scale = std::min(scaleX, scaleY);
         sprite_->setScale({ scale, scale });
 
-        // centrar origen en el sprite (ahora en coordenadas locales escaladas)
+        // centrar origen en el sprite
         auto newLocal = sprite_->getLocalBounds();
         sprite_->setOrigin({ newLocal.size.x / 2.f, newLocal.size.y / 2.f });
         sprite_->setPosition(position_);
-    } else {
-        // fallback visual si no hay textura, usar tamaño objetivo
-        fallbackRect_.setSize({ TARGET_PLAYER_W, TARGET_PLAYER_H });
-        fallbackRect_.setOrigin(fallbackRect_.getSize() / 2.f);
-        fallbackRect_.setFillColor(sf::Color(120, 180, 240));
-        fallbackRect_.setPosition(position_);
     }
 }
 
@@ -43,13 +37,7 @@ void Player::draw(sf::RenderWindow& window) const {
 
 void Player::moveLeft(float dt) {
     position_.x -= speed_ * dt;
-    // clamp left boundary (margen de 16 px)
     if (position_.x < 16.f) position_.x = 16.f;
-}
-
-void Player::moveRight(float dt) {
-    position_.x += speed_ * dt;
-    // Nota: si quieres restringir al ancho de ventana, es mejor pasar límites desde main
 }
 
 void Player::setPosition(const sf::Vector2f& pos) {
@@ -61,4 +49,21 @@ void Player::setPosition(const sf::Vector2f& pos) {
 sf::FloatRect Player::bounds() const {
     if (sprite_) return sprite_->getGlobalBounds();
     return fallbackRect_.getGlobalBounds();
+}
+void Player::setHorizontalLimits(float left, float right) {
+    leftLimit_ = left;
+    rightLimit_ = right;
+}
+
+
+void Player::moveRight(float dt) {
+    position_.x += speed_ * dt;
+    float halfW = 3.f;
+    if (sprite_) {
+        auto gb = sprite_->getGlobalBounds();
+        halfW = gb.size.x / 3.f;
+    } else {
+        halfW = fallbackRect_.getSize().x / 3.f;
+    }
+    if (position_.x > rightLimit_ - halfW) position_.x = rightLimit_ - halfW;
 }

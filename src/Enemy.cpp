@@ -24,7 +24,6 @@ Enemy::Enemy(const sf::Texture* texture, const sf::Vector2f& startPos) {
         fallbackRect_.setFillColor(sf::Color(200,80,80));
         fallbackRect_.setPosition(startPos);
     }
-    // set some default movement bounds based on startPos
     leftLimit_ = startPos.x - 80.f;
     rightLimit_ = startPos.x + 80.f;
 }

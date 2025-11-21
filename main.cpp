@@ -21,16 +21,16 @@ static bool rectsIntersect(const sf::FloatRect& a, const sf::FloatRect& b) {
 
 int main() {
     // --- Configuración de ventana y grid ---
-    const int WINDOW_COLS = 28;
-    const int WINDOW_ROWS = 20;
-    const int CELL_SIZE = 32; // px por célula (ajustable)
+    const int WINDOW_COLS = 20;
+    const int WINDOW_ROWS = 25;
+    const int CELL_SIZE = 32; // px por célula
     const float HUD_HEIGHT = 64.f;
     const sf::Vector2f MARGIN{12.f, 12.f};
 
     unsigned int windowWidth = static_cast<unsigned int>(MARGIN.x * 2 + WINDOW_COLS * CELL_SIZE);
     unsigned int windowHeight = static_cast<unsigned int>(MARGIN.y + HUD_HEIGHT + WINDOW_ROWS * CELL_SIZE + MARGIN.y);
 
-    sf::RenderWindow window(sf::VideoMode({ windowWidth, windowHeight }), "Shooter MVP - SFML 3");
+    sf::RenderWindow window(sf::VideoMode({ windowWidth, windowHeight }), "Naves");
     window.setVerticalSyncEnabled(true);
 
     // --- Cargar assets (texturas / fuente) ---
@@ -51,6 +51,8 @@ int main() {
     // --- Cargar sonido de laser
     sf::SoundBuffer laserBuf;
     std::optional<sf::Sound> laserSound;
+
+
 
     if (laserBuf.loadFromFile("assets/sounds/laser_sound.mp3")) {
         laserSound.emplace(laserBuf);
@@ -80,7 +82,9 @@ int main() {
         MARGIN.y + HUD_HEIGHT + (WINDOW_ROWS * CELL_SIZE) - CELL_SIZE * 1.5f
     };
     Player player(hasPlayerTex ? &texPlayer : nullptr, playerStart);
-
+    float leftMargin = 16.f;
+    float rightMargin = static_cast<float>(windowWidth);
+    player.setHorizontalLimits(leftMargin, rightMargin);
     // --- Pool de balas  ---
     const size_t BULLET_POOL_SIZE = 64;
     std::vector<Bullet> bullets;
