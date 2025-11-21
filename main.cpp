@@ -101,8 +101,8 @@ int main() {
 
     // --- Crear enemigos (formación simple) ---
     std::vector<Enemy> enemies;
-    const int ENEMY_COLS = 24;
-    const int ENEMY_ROWS = 24;
+    const int ENEMY_COLS = 3;
+    const int ENEMY_ROWS = 3;
     const float formationStartX = MARGIN.x + 2.f * CELL_SIZE;
     const float formationStartY = MARGIN.y + HUD_HEIGHT + 1.f * CELL_SIZE;
     const float spacingX = static_cast<float>(CELL_SIZE) * 1.6f;
