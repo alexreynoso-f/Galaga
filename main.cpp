@@ -1,6 +1,7 @@
-#include <iostream>
+#include <SFML/Graphics.hpp>
+#include <vector>
 
 int main() {
-    std::cout << "Hello, World!" << std::endl;
+
     return 0;
 }
