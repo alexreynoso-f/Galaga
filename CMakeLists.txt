@@ -44,3 +44,10 @@ target_link_libraries(Galaga PRIVATE
         SFML::Audio
         SFML::Network
 )
+add_custom_command(TARGET Galaga POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:Galaga>/assets
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_SOURCE_DIR}/assets
+        $<TARGET_FILE_DIR:Galaga>/assets
+        COMMENT "Copying assets to output directory"
+)
