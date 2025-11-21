@@ -48,28 +48,18 @@ int main() {
     if (!hasBgTex)      std::cerr << "[WARN] No pudo cargar assets/textures/background.png\n";
     if (!hasFont)       std::cerr << "[WARN] No pudo cargar assets/fonts/font.ttf\n";
 
-    // --- Cargar sonido de laser (intenta varias extensiones) ---
+    // --- Cargar sonido de laser
     sf::SoundBuffer laserBuf;
-    std::optional<sf::Sound> laserSound; // se construirá solo si cargamos el buffer
-    bool hasLaser = false;
-    const std::string basePath = "assets/sounds/laser_sound";
-    const std::vector<std::string> tryExt = { ".mp3" };
-    for (const auto &ext : tryExt) {
-        std::string p = basePath + ext;
-        if (laserBuf.loadFromFile(p)) {
-            hasLaser = true;
-            // construir sf::Sound con el buffer (sf::Sound no tiene ctor por defecto en esta SFML)
-            laserSound.emplace(laserBuf);
-            std::cout << "[INFO] Cargado sonido laser: " << p << "\n";
-            break;
-        }
-    }
-    if (!hasLaser) {
-        std::cerr << "[WARN] No se encontró assets/sounds/laser_sound.(wav|ogg|flac|aiff)\n";
-        std::cerr << "        Asegúrate de colocar el archivo con nombre 'laser_sound' y una de las extensiones arriba dentro de assets/sounds/\n";
+    std::optional<sf::Sound> laserSound;
+
+    if (laserBuf.loadFromFile("assets/sounds/laser_sound.mp3")) {
+        laserSound.emplace(laserBuf);
+        std::cout << "[INFO] Cargado sonido laser: assets/sounds/laser_sound.mp3\n";
+    } else {
+        std::cerr << "[WARN] No se pudo cargar assets/sounds/laser_sound.mp3\n";
     }
 
-    // --- Preparar sprite de background (si se cargó) ---
+
     std::unique_ptr<sf::Sprite> bgSprite;
     if (hasBgTex) {
         bgSprite = std::make_unique<sf::Sprite>(texBackground);
@@ -91,7 +81,7 @@ int main() {
     };
     Player player(hasPlayerTex ? &texPlayer : nullptr, playerStart);
 
-    // --- Pool de balas (reutilizable) ---
+    // --- Pool de balas  ---
     const size_t BULLET_POOL_SIZE = 64;
     std::vector<Bullet> bullets;
     bullets.reserve(BULLET_POOL_SIZE);
@@ -99,7 +89,7 @@ int main() {
         bullets.emplace_back(hasBulletTex ? &texBullet : nullptr);
     }
 
-    // --- Crear enemigos (formación simple) ---
+    // --- Crear enemigos ---
     std::vector<Enemy> enemies;
     const int ENEMY_COLS = 3;
     const int ENEMY_ROWS = 3;
@@ -118,7 +108,7 @@ int main() {
         }
     }
 
-    // --- HUD / texto (opcional) ---
+    // Score-
     std::optional<sf::Text> scoreText;
     if (hasFont) {
         scoreText.emplace(font, "Score: 0", 20);
@@ -136,10 +126,7 @@ int main() {
         for (auto &b : bullets) {
             if (!b.isActive()) {
                 b.spawn(pos, speedY);
-                if (hasLaser && laserSound.has_value()) {
-                    // reproducir sonido (si quieres solapamiento, usa pool de sf::Sound)
                     laserSound->play();
-                }
                 return;
             }
         }
@@ -147,7 +134,6 @@ int main() {
 
     // --- Bucle principal ---
     while (window.isOpen()) {
-        // Eventos (SFML 3)
         while (auto evOpt = window.pollEvent()) {
             const sf::Event& ev = *evOpt;
             if (ev.is<sf::Event::Closed>()) {
@@ -163,7 +149,7 @@ int main() {
                     sf::Vector2f bulletPos{ pb.position.x + pb.size.x / 2.f, pb.position.y - 6.f };
                     spawnBulletFromPool(bulletPos, -480.f); // speedY negativo => sube
                 } else if (k->code == sf::Keyboard::Key::R) {
-                    // Reiniciar (simple)
+
                     player.setPosition(playerStart);
                     enemies.clear();
                     for (int r = 0; r < ENEMY_ROWS; ++r) {
@@ -214,7 +200,7 @@ int main() {
             }
         }
 
-        // (Opcional) Colisiones: enemy vs player (simple)
+        // Colisiones: enemy vs player (simple)
         for (auto &e : enemies) {
             if (!e.isActive()) continue;
             if (rectsIntersect(e.bounds(), player.bounds())) {
