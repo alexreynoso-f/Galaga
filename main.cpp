@@ -1,5 +1,5 @@
 // src/main.cpp
-// Versión con soporte de sonido de laser al disparar (usa std::optional<sf::Sound>)
+// Versión con menú integrado (Menu.h) y sonido de laser seguro
 #include <SFML/Graphics.hpp>
 #include <SFML/Audio.hpp>
 #include <vector>
@@ -11,6 +11,7 @@
 #include "Player.h"
 #include "Bullet.h"
 #include "Enemy.h"
+#include "Menu.h"
 
 static bool rectsIntersect(const sf::FloatRect& a, const sf::FloatRect& b) {
     return !(a.position.x + a.size.x < b.position.x ||
@@ -37,23 +38,20 @@ int main() {
     sf::Texture texPlayer, texEnemy, texBullet, texBackground;
     sf::Font font;
     bool hasPlayerTex = texPlayer.loadFromFile("assets/textures/player.png");
-    bool hasEnemyTex  = texEnemy.loadFromFile( "assets/textures/enemy.png");
-    bool hasBulletTex = texBullet.loadFromFile("assets/textures/bullet.png");
+    bool hasEnemyTex  = texEnemy.loadFromFile("assets/textures/enemy.png");
+    bool hasBulletTex = texBullet.loadFromFile("assets/textures/bullet_2.png");
     bool hasBgTex     = texBackground.loadFromFile("assets/textures/background.png");
     bool hasFont      = font.openFromFile("assets/fonts/font.ttf");
 
     if (!hasPlayerTex)  std::cerr << "[WARN] No pudo cargar assets/textures/player.png\n";
     if (!hasEnemyTex)   std::cerr << "[WARN] No pudo cargar assets/textures/enemy.png\n";
-    if (!hasBulletTex)  std::cerr << "[WARN] No pudo cargar assets/textures/bullet.png\n";
+    if (!hasBulletTex)  std::cerr << "[WARN] No pudo cargar assets/textures/bullet_2.png\n";
     if (!hasBgTex)      std::cerr << "[WARN] No pudo cargar assets/textures/background.png\n";
     if (!hasFont)       std::cerr << "[WARN] No pudo cargar assets/fonts/font.ttf\n";
 
-    // --- Cargar sonido de laser
+    // --- Cargar sonido de laser (ruta fija) ---
     sf::SoundBuffer laserBuf;
     std::optional<sf::Sound> laserSound;
-
-
-
     if (laserBuf.loadFromFile("assets/sounds/laser_sound.mp3")) {
         laserSound.emplace(laserBuf);
         std::cout << "[INFO] Cargado sonido laser: assets/sounds/laser_sound.mp3\n";
@@ -61,7 +59,7 @@ int main() {
         std::cerr << "[WARN] No se pudo cargar assets/sounds/laser_sound.mp3\n";
     }
 
-
+    // --- Preparar sprite de background (si se cargó) ---
     std::unique_ptr<sf::Sprite> bgSprite;
     if (hasBgTex) {
         bgSprite = std::make_unique<sf::Sprite>(texBackground);
@@ -76,6 +74,13 @@ int main() {
         }
     }
 
+    // --- Menu ---
+    Menu menu(hasFont ? &font : nullptr, 36);
+    menu.setOptions({ "Play", "Exit" }, { static_cast<float>(windowWidth) / 2.f, 220.f }, 64.f);
+
+    enum class AppState { Menu, Playing };
+    AppState state = AppState::Menu;
+
     // --- Crear player ---
     sf::Vector2f playerStart{
         MARGIN.x + (WINDOW_COLS * CELL_SIZE) / 2.f,
@@ -85,6 +90,7 @@ int main() {
     float leftMargin = 16.f;
     float rightMargin = static_cast<float>(windowWidth);
     player.setHorizontalLimits(leftMargin, rightMargin);
+
     // --- Pool de balas  ---
     const size_t BULLET_POOL_SIZE = 64;
     std::vector<Bullet> bullets;
@@ -93,7 +99,7 @@ int main() {
         bullets.emplace_back(hasBulletTex ? &texBullet : nullptr);
     }
 
-    // --- Crear enemigos ---
+    // --- Crear enemigos (formación inicial preparada en lambda resetGame) ---
     std::vector<Enemy> enemies;
     const int ENEMY_COLS = 3;
     const int ENEMY_ROWS = 3;
@@ -102,17 +108,24 @@ int main() {
     const float spacingX = static_cast<float>(CELL_SIZE) * 1.6f;
     const float spacingY = static_cast<float>(CELL_SIZE) * 1.1f;
 
-    for (int r = 0; r < ENEMY_ROWS; ++r) {
-        for (int c = 0; c < ENEMY_COLS; ++c) {
-            sf::Vector2f pos{
-                formationStartX + c * spacingX,
-                formationStartY + r * spacingY
-            };
-            enemies.emplace_back(hasEnemyTex ? &texEnemy : nullptr, pos);
+    auto resetGame = [&]() {
+        player.setPosition(playerStart);
+        enemies.clear();
+        for (int r = 0; r < ENEMY_ROWS; ++r) {
+            for (int c = 0; c < ENEMY_COLS; ++c) {
+                sf::Vector2f pos{
+                    formationStartX + c * spacingX,
+                    formationStartY + r * spacingY
+                };
+                enemies.emplace_back(hasEnemyTex ? &texEnemy : nullptr, pos);
+            }
         }
-    }
+        for (auto &b : bullets) b.deactivate();
+    };
+    // prepare initial formation (but don't start playing until menu Play)
+    resetGame();
 
-    // Score-
+    // Score
     std::optional<sf::Text> scoreText;
     if (hasFont) {
         scoreText.emplace(font, "Score: 0", 20);
@@ -125,12 +138,12 @@ int main() {
     sf::Clock clock;
     float dt = 0.f;
 
-    // Helper: spawn bullet usando pool (captura laserSound/hasLaser para reproducir)
+    // Helper: spawn bullet usando pool (comprueba laserSound antes de play)
     auto spawnBulletFromPool = [&](const sf::Vector2f& pos, float speedY) {
         for (auto &b : bullets) {
             if (!b.isActive()) {
                 b.spawn(pos, speedY);
-                    laserSound->play();
+                if (laserSound.has_value()) laserSound->play();
                 return;
             }
         }
@@ -138,6 +151,7 @@ int main() {
 
     // --- Bucle principal ---
     while (window.isOpen()) {
+        // Eventos
         while (auto evOpt = window.pollEvent()) {
             const sf::Event& ev = *evOpt;
             if (ev.is<sf::Event::Closed>()) {
@@ -145,29 +159,31 @@ int main() {
                 break;
             }
 
+            // Always allow quitting with Escape
             if (ev.is<sf::Event::KeyPressed>()) {
                 const auto* k = ev.getIf<sf::Event::KeyPressed>();
-                if (!k) continue;
-                if (k->code == sf::Keyboard::Key::Space) {
-                    sf::FloatRect pb = player.bounds();
-                    sf::Vector2f bulletPos{ pb.position.x + pb.size.x / 2.f, pb.position.y - 6.f };
-                    spawnBulletFromPool(bulletPos, -480.f); // speedY negativo => sube
-                } else if (k->code == sf::Keyboard::Key::R) {
+                if (k && k->code == sf::Keyboard::Key::Escape) {
+                    window.close();
+                    break;
+                }
+            }
 
-                    player.setPosition(playerStart);
-                    enemies.clear();
-                    for (int r = 0; r < ENEMY_ROWS; ++r) {
-                        for (int c = 0; c < ENEMY_COLS; ++c) {
-                            sf::Vector2f pos{
-                                formationStartX + c * spacingX,
-                                formationStartY + r * spacingY
-                            };
-                            enemies.emplace_back(hasEnemyTex ? &texEnemy : nullptr, pos);
-                        }
+            // Route events to menu or game
+            if (state == AppState::Menu) {
+                menu.processEvent(ev, window);
+            } else { // Playing
+                if (ev.is<sf::Event::KeyPressed>()) {
+                    const auto* k = ev.getIf<sf::Event::KeyPressed>();
+                    if (!k) continue;
+                    if (k->code == sf::Keyboard::Key::Space) {
+                        sf::FloatRect pb = player.bounds();
+                        sf::Vector2f bulletPos{ pb.position.x + pb.size.x / 2.f, pb.position.y - 6.f };
+                        spawnBulletFromPool(bulletPos, -480.f); // speedY negativo => sube
+                    } else if (k->code == sf::Keyboard::Key::R) {
+                        resetGame();
+                        score = 0;
+                        if (scoreText) scoreText->setString("Score: 0");
                     }
-                    for (auto &b : bullets) b.deactivate();
-                    score = 0;
-                    if (scoreText) scoreText->setString("Score: 0");
                 }
             }
         } // fin pollEvent
@@ -175,41 +191,57 @@ int main() {
         // Delta time
         dt = clock.restart().asSeconds();
 
-        // Input continuo: movimiento del player
-        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Left) ||
-            sf::Keyboard::isKeyPressed(sf::Keyboard::Key::A)) {
-            player.moveLeft(dt);
-        } else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Right) ||
-                   sf::Keyboard::isKeyPressed(sf::Keyboard::Key::D)) {
-            player.moveRight(dt);
-        }
-
-        // Actualizaciones
-        player.update(dt);
-        for (auto &b : bullets) b.update(dt);
-        for (auto &e : enemies) e.update(dt);
-
-        // Colisiones: bullets vs enemies
-        for (auto &b : bullets) {
-            if (!b.isActive()) continue;
-            for (auto &e : enemies) {
-                if (!e.isActive()) continue;
-                if (rectsIntersect(b.bounds(), e.bounds())) {
-                    b.deactivate();
-                    e.setActive(false);
-                    score += 10;
-                    if (scoreText) scoreText->setString("Score: " + std::to_string(score));
-                    break; // bala consumida -> pasar a la siguiente bala
+        // If in menu, handle menu logic and check selection
+        if (state == AppState::Menu) {
+            menu.update(dt);
+            if (menu.consumeConfirm()) {
+                int sel = menu.getSelectedIndex();
+                if (sel == 0) { // Play
+                    resetGame();
+                    score = 0;
+                    if (scoreText) scoreText->setString("Score: 0");
+                    state = AppState::Playing;
+                } else if (sel == 1) { // Exit
+                    window.close();
+                    break;
                 }
             }
-        }
+        } else { // Playing: input continuo + updates
+            if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Left) ||
+                sf::Keyboard::isKeyPressed(sf::Keyboard::Key::A)) {
+                player.moveLeft(dt);
+            } else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Right) ||
+                       sf::Keyboard::isKeyPressed(sf::Keyboard::Key::D)) {
+                player.moveRight(dt);
+            }
 
-        // Colisiones: enemy vs player (simple)
-        for (auto &e : enemies) {
-            if (!e.isActive()) continue;
-            if (rectsIntersect(e.bounds(), player.bounds())) {
-                e.setActive(false);
-                player.setPosition(playerStart);
+            // Actualizaciones
+            player.update(dt);
+            for (auto &b : bullets) b.update(dt);
+            for (auto &e : enemies) e.update(dt);
+
+            // Colisiones: bullets vs enemies
+            for (auto &b : bullets) {
+                if (!b.isActive()) continue;
+                for (auto &e : enemies) {
+                    if (!e.isActive()) continue;
+                    if (rectsIntersect(b.bounds(), e.bounds())) {
+                        b.deactivate();
+                        e.setActive(false);
+                        score += 10;
+                        if (scoreText) scoreText->setString("Score: " + std::to_string(score));
+                        break; // bala consumida -> pasar a la siguiente bala
+                    }
+                }
+            }
+
+            // Colisiones: enemy vs player (simple)
+            for (auto &e : enemies) {
+                if (!e.isActive()) continue;
+                if (rectsIntersect(e.bounds(), player.bounds())) {
+                    e.setActive(false);
+                    player.setPosition(playerStart);
+                }
             }
         }
 
@@ -221,21 +253,22 @@ int main() {
             window.draw(*bgSprite);
         }
 
-        // Draw enemies
-        for (auto &e : enemies) {
-            if (e.isActive()) e.draw(window);
+        if (state == AppState::Menu) {
+            menu.draw(window);
+        } else {
+            // Draw enemies
+            for (auto &e : enemies) {
+                if (e.isActive()) e.draw(window);
+            }
+            // Draw bullets
+            for (auto &b : bullets) {
+                if (b.isActive()) b.draw(window);
+            }
+            // Draw player
+            player.draw(window);
+            // HUD
+            if (scoreText) window.draw(*scoreText);
         }
-
-        // Draw bullets
-        for (auto &b : bullets) {
-            if (b.isActive()) b.draw(window);
-        }
-
-        // Draw player
-        player.draw(window);
-
-        // HUD
-        if (scoreText) window.draw(*scoreText);
 
         window.display();
     }
