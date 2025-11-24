@@ -1,5 +1,3 @@
-// src/main.cpp
-// Versión con menú integrado (Menu.h) y sonido de laser seguro
 #include <SFML/Graphics.hpp>
 #include <SFML/Audio.hpp>
 #include <vector>
@@ -128,7 +126,7 @@ int main() {
     // Score
     std::optional<sf::Text> scoreText;
     if (hasFont) {
-        scoreText.emplace(font, "Score: 0", 20);
+        scoreText.emplace(font, "Score: 0", 35);
         scoreText->setFillColor(sf::Color::White);
         scoreText->setPosition({ MARGIN.x + 8.f, MARGIN.y + 8.f });
     }
