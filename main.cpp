@@ -29,15 +29,15 @@ int main() {
     unsigned int windowWidth = static_cast<unsigned int>(MARGIN.x * 2 + WINDOW_COLS * CELL_SIZE);
     unsigned int windowHeight = static_cast<unsigned int>(MARGIN.y + HUD_HEIGHT + WINDOW_ROWS * CELL_SIZE + MARGIN.y);
 
-    sf::RenderWindow window(sf::VideoMode({ windowWidth, windowHeight }), "Naves");
+    sf::RenderWindow window(sf::VideoMode({ windowWidth, windowHeight }), "Space");
     window.setVerticalSyncEnabled(true);
 
     // --- Cargar assets (texturas / fuente) ---
     sf::Texture texPlayer, texEnemy, texBullet, texBackground;
     sf::Font font;
     bool hasPlayerTex = texPlayer.loadFromFile("assets/textures/player.png");
-    bool hasEnemyTex  = texEnemy.loadFromFile("assets/textures/enemy.png");
-    bool hasBulletTex = texBullet.loadFromFile("assets/textures/bullet_2.png");
+    bool hasEnemyTex  = texEnemy.loadFromFile("assets/textures/alien_bottom.png");
+    bool hasBulletTex = texBullet.loadFromFile("assets/textures/bullet.png");
     bool hasBgTex     = texBackground.loadFromFile("assets/textures/background.png");
     bool hasFont      = font.openFromFile("assets/fonts/font.ttf");
 
