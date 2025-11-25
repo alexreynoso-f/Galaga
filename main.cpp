@@ -5,7 +5,7 @@
 #include <memory>
 #include <optional>
 #include <string>
-
+#include <random>
 #include "Player.h"
 #include "Bullet.h"
 #include "Enemy.h"
@@ -39,10 +39,17 @@ int main() {
     bool hasAlienTop  = texAlienTop.loadFromFile("assets/textures/alien_top.png");
     bool hasAlienMid  = texAlienMid.loadFromFile("assets/textures/alien_mid.png");
     bool hasAlienBot  = texAlienBot.loadFromFile("assets/textures/alien_bottom.png");
-    bool hasBulletTex = texBullet.loadFromFile("assets/textures/bullet_2.png");
+    bool hasBulletTex = texBullet.loadFromFile("assets/textures/bullet.png");
     bool hasBgTex     = texBackground.loadFromFile("assets/textures/background.png");
     bool hasFont      = font.openFromFile("assets/fonts/font.ttf");
 
+    if (!hasPlayerTex)  std::cerr << "[WARN] No pudo cargar assets/textures/player.png\n";
+    if (!hasAlienTop)   std::cerr << "[WARN] No pudo cargar assets/textures/alien_top.png\n";
+    if (!hasAlienMid)   std::cerr << "[WARN] No pudo cargar assets/textures/alien_mid.png\n";
+    if (!hasAlienBot)   std::cerr << "[WARN] No pudo cargar assets/textures/alien_bottom.png\n";
+    if (!hasBulletTex)  std::cerr << "[WARN] No pudo cargar assets/textures/bullet.png\n";
+    if (!hasBgTex)      std::cerr << "[WARN] No pudo cargar assets/textures/background.png\n";
+    if (!hasFont)       std::cerr << "[WARN] No pudo cargar assets/fonts/font.ttf\n";
 
     sf::SoundBuffer laserBuf;
     std::optional<sf::Sound> laserSound;
@@ -89,21 +96,28 @@ int main() {
         bullets.emplace_back(hasBulletTex ? &texBullet : nullptr);
     }
 
+    const size_t ENEMY_BULLET_POOL_SIZE = 32;
+    std::vector<Bullet> enemyBullets;
+    enemyBullets.reserve(ENEMY_BULLET_POOL_SIZE);
+    for (size_t i = 0; i < ENEMY_BULLET_POOL_SIZE; ++i) {
+        enemyBullets.emplace_back(hasBulletTex ? &texBullet : nullptr);
+    }
+
     const int ENEMY_COLS = 11;
     const int ENEMY_ROWS = 5;
     const float formationStartX = MARGIN.x + 2.f * CELL_SIZE;
     const float formationStartY = MARGIN.y + HUD_HEIGHT + 1.f * CELL_SIZE;
-    const float spacingX = static_cast<float>(CELL_SIZE) * 1.60f;
-    const float spacingY = static_cast<float>(CELL_SIZE) * 1.20f;
+    const float spacingX = static_cast<float>(CELL_SIZE) * 1.35f;
+    const float spacingY = static_cast<float>(CELL_SIZE) * 1.10f;
 
     Formation formation(
-    hasAlienTop ? &texAlienTop : nullptr,
-    hasAlienMid ? &texAlienMid : nullptr,
-    hasAlienBot ? &texAlienBot : nullptr,
-    ENEMY_COLS, ENEMY_ROWS,
-    sf::Vector2f{ formationStartX, formationStartY },
-    spacingX, spacingY,
-    /*speed*/ 40.f, /*drop*/ 18.f
+        hasAlienTop ? &texAlienTop : nullptr,
+        hasAlienMid ? &texAlienMid : nullptr,
+        hasAlienBot ? &texAlienBot : nullptr,
+        ENEMY_COLS, ENEMY_ROWS,
+        sf::Vector2f{ formationStartX, formationStartY },
+        spacingX, spacingY,
+        40.f, 18.f
     );
 
     std::optional<sf::Text> scoreText;
@@ -113,6 +127,14 @@ int main() {
         scoreText->setPosition({ MARGIN.x + 8.f, MARGIN.y + 8.f });
     }
     int score = 0;
+
+    int lives = 3;
+    std::optional<sf::Text> livesText;
+    if (hasFont) {
+        livesText.emplace(font, "Lives: 3", 28);
+        livesText->setFillColor(sf::Color::White);
+        livesText->setPosition({ MARGIN.x + 200.f, MARGIN.y + 8.f });
+    }
 
     sf::Clock clock;
     float dt = 0.f;
@@ -131,10 +153,44 @@ int main() {
         return false;
     };
 
+    auto spawnEnemyBulletFromPool = [&](const sf::Vector2f& pos, float speedY) -> bool {
+        for (auto &b : enemyBullets) {
+            if (!b.isActive()) {
+                b.spawn(pos, speedY);
+                return true;
+            }
+        }
+        return false;
+    };
+
     auto resetGame = [&]() {
         player.setPosition(playerStart);
         formation.reset();
         for (auto &b : bullets) b.deactivate();
+        for (auto &b : enemyBullets) b.deactivate();
+    };
+
+    std::mt19937 rng(static_cast<unsigned int>(std::random_device{}()));
+    const float ENEMY_SHOOT_INTERVAL_MIN = 0.9f;
+    const float ENEMY_SHOOT_INTERVAL_MAX = 2.0f;
+    std::uniform_real_distribution<float> shootIntervalDist(ENEMY_SHOOT_INTERVAL_MIN, ENEMY_SHOOT_INTERVAL_MAX);
+    std::uniform_int_distribution<int> colDist(0, ENEMY_COLS - 1);
+    float enemyShootTimer = shootIntervalDist(rng);
+
+    auto trySpawnFromColumn = [&](int col) -> bool {
+        auto &en = formation.enemies();
+        for (int r = ENEMY_ROWS - 1; r >= 0; --r) {
+            int idx = r * ENEMY_COLS + col;
+            if (idx < 0 || idx >= static_cast<int>(en.size())) continue;
+            auto &enemy = en[idx];
+            if (enemy.isActive()) {
+                sf::FloatRect eb = enemy.bounds();
+                sf::Vector2f shotPos{ eb.position.x + eb.size.x / 2.f, eb.position.y + eb.size.y + 4.f };
+                if (spawnEnemyBulletFromPool(shotPos, 220.f)) return true;
+                return false;
+            }
+        }
+        return false;
     };
 
     resetGame();
@@ -146,7 +202,6 @@ int main() {
                 window.close();
                 break;
             }
-
             if (ev.is<sf::Event::KeyPressed>()) {
                 const auto* k = ev.getIf<sf::Event::KeyPressed>();
                 if (k && k->code == sf::Keyboard::Key::Escape) {
@@ -154,10 +209,21 @@ int main() {
                     break;
                 }
             }
-
-            if (state == AppState::Menu) 
+            if (state == AppState::Menu) {
                 menu.processEvent(ev, window);
-
+            } else {
+                if (ev.is<sf::Event::KeyPressed>()) {
+                    const auto* k = ev.getIf<sf::Event::KeyPressed>();
+                    if (!k) continue;
+                    if (k->code == sf::Keyboard::Key::R) {
+                        resetGame();
+                        score = 0;
+                        lives = 3;
+                        if (scoreText) scoreText->setString("Score: 0");
+                        if (livesText) livesText->setString("Lives: " + std::to_string(lives));
+                    }
+                }
+            }
         }
 
         dt = clock.restart().asSeconds();
@@ -166,12 +232,14 @@ int main() {
             menu.update(dt);
             if (menu.consumeConfirm()) {
                 int sel = menu.getSelectedIndex();
-                if (sel == 0) { // Play
+                if (sel == 0) {
                     resetGame();
                     score = 0;
+                    lives = 3;
                     if (scoreText) scoreText->setString("Score: 0");
+                    if (livesText) livesText->setString("Lives: " + std::to_string(lives));
                     state = AppState::Playing;
-                } else if (sel == 1) { // Exit
+                } else if (sel == 1) {
                     window.close();
                     break;
                 }
@@ -200,7 +268,19 @@ int main() {
 
             player.update(dt);
             for (auto &b : bullets) b.update(dt);
-            formation.update(dt, /*screenLeft=*/MARGIN.x, /*screenRight=*/ static_cast<float>(windowWidth) - MARGIN.x);
+            for (auto &b : enemyBullets) b.update(dt);
+            formation.update(dt, MARGIN.x, static_cast<float>(windowWidth) - MARGIN.x);
+
+            enemyShootTimer -= dt;
+            if (enemyShootTimer <= 0.f) {
+                int tries = ENEMY_COLS;
+                bool spawned = false;
+                while (tries-- > 0 && !spawned) {
+                    int col = colDist(rng);
+                    spawned = trySpawnFromColumn(col);
+                }
+                enemyShootTimer = shootIntervalDist(rng);
+            }
 
             for (auto &b : bullets) {
                 if (!b.isActive()) continue;
@@ -216,11 +296,33 @@ int main() {
                 }
             }
 
+            for (auto &b : enemyBullets) {
+                if (!b.isActive()) continue;
+                if (rectsIntersect(b.bounds(), player.bounds())) {
+                    b.deactivate();
+                    lives -= 1;
+                    if (livesText) livesText->setString("Lives: " + std::to_string(lives));
+                    if (lives <= 0) {
+                        state = AppState::Menu;
+                        resetGame();
+                    } else {
+                        player.setPosition(playerStart);
+                    }
+                }
+            }
+
             for (auto &e : formation.enemies()) {
                 if (!e.isActive()) continue;
                 if (rectsIntersect(e.bounds(), player.bounds())) {
                     e.setActive(false);
-                    player.setPosition(playerStart);
+                    lives -= 1;
+                    if (livesText) livesText->setString("Lives: " + std::to_string(lives));
+                    if (lives <= 0) {
+                        state = AppState::Menu;
+                        resetGame();
+                    } else {
+                        player.setPosition(playerStart);
+                    }
                 }
             }
         }
@@ -238,9 +340,12 @@ int main() {
             for (auto &b : bullets) {
                 if (b.isActive()) b.draw(window);
             }
+            for (auto &b : enemyBullets) {
+                if (b.isActive()) b.draw(window);
+            }
             player.draw(window);
-
             if (scoreText) window.draw(*scoreText);
+            if (livesText) window.draw(*livesText);
         }
 
         window.display();

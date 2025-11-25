@@ -1,4 +1,3 @@
-// src/Bullet.cpp
 #include "Bullet.h"
 #include <memory>
 

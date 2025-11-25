@@ -28,4 +28,4 @@ private:
 };
 
 
-#endif //GALAGA_PLAYER_H
+#endif

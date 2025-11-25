@@ -16,7 +16,6 @@ void Menu::setOptions(const std::vector<std::string>& options,
     backRects_.clear();
 
     for (size_t i = 0; i < options.size(); ++i) {
-        // background rect (siempre)
         sf::RectangleShape rect;
         rect.setSize({160.f, 40.f});
         rect.setOrigin(rect.getSize() / 2.f);
@@ -26,7 +25,6 @@ void Menu::setOptions(const std::vector<std::string>& options,
 
         if (font_) {
             sf::Text t(*font_, options[i], charSize_);
-            // Ajuste de origen para centrar el texto (local bounds)
             auto lb = t.getLocalBounds();
             t.setOrigin(sf::Vector2f{ lb.position.x + lb.size.x / 2.f, lb.position.y + lb.size.y / 2.f });
             t.setPosition(sf::Vector2f{ position_.x, position_.y + static_cast<float>(i) * spacing_ });
@@ -66,7 +64,6 @@ void Menu::processEvent(const sf::Event& ev, const sf::RenderWindow& window) {
         }
     }
 
-    // click (left)
     if (ev.is<sf::Event::MouseButtonPressed>()) {
         const auto* mb = ev.getIf<sf::Event::MouseButtonPressed>();
         if (!mb) return;
