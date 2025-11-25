@@ -34,6 +34,9 @@ add_executable(Galaga
         include/menu.h
         src/Formation.cpp
         include/Formation.h
+        src/Shield.cpp
+        include/Shield.h
+        include/Shield.h
 )
 
 # 🎵 Ruta para acceder a assets en runtime (NO COMPILA, solo referencia)
@@ -48,10 +51,8 @@ target_link_libraries(Galaga PRIVATE
         SFML::Audio
         SFML::Network
 )
-add_custom_command(TARGET Galaga POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E make_directory $<TARGET_FILE_DIR:Galaga>/assets
+add_custom_command(TARGET Galaga PRE_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_directory
         ${CMAKE_SOURCE_DIR}/assets
         $<TARGET_FILE_DIR:Galaga>/assets
-        COMMENT "Copying assets to output directory"
 )

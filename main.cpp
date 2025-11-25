@@ -11,6 +11,7 @@
 #include "Enemy.h"
 #include "Menu.h"
 #include "Formation.h"
+#include "Shield.h"
 
 static bool rectsIntersect(const sf::FloatRect& a, const sf::FloatRect& b) {
     return !(a.position.x + a.size.x < b.position.x ||
@@ -32,32 +33,33 @@ int main() {
     sf::RenderWindow window(sf::VideoMode({ windowWidth, windowHeight }), "Naves");
     window.setVerticalSyncEnabled(true);
 
-    sf::Texture texPlayer, texBullet, texBackground;
-    sf::Texture texAlienTop, texAlienMid, texAlienBot;
+    sf::Texture texPlayer, texBulletPlayer, texBulletEnemy, texBackground;
+    sf::Texture texAlienTop, texAlienMid, texAlienBot, texShield;
     sf::Font font;
     bool hasPlayerTex = texPlayer.loadFromFile("assets/textures/player.png");
+    bool hasBulletPlayer = texBulletPlayer.loadFromFile("assets/textures/bullet.png");
+    bool hasBulletEnemy = texBulletEnemy.loadFromFile("assets/textures/bullet_2.png");
     bool hasAlienTop  = texAlienTop.loadFromFile("assets/textures/alien_top.png");
     bool hasAlienMid  = texAlienMid.loadFromFile("assets/textures/alien_mid.png");
     bool hasAlienBot  = texAlienBot.loadFromFile("assets/textures/alien_bottom.png");
-    bool hasBulletTex = texBullet.loadFromFile("assets/textures/bullet.png");
     bool hasBgTex     = texBackground.loadFromFile("assets/textures/background.png");
+    bool hasShieldTex = texShield.loadFromFile("assets/textures/shield.png");
     bool hasFont      = font.openFromFile("assets/fonts/font.ttf");
 
     if (!hasPlayerTex)  std::cerr << "[WARN] No pudo cargar assets/textures/player.png\n";
+    if (!hasBulletPlayer) std::cerr << "[WARN] No pudo cargar assets/textures/bullet.png\n";
+    if (!hasBulletEnemy) std::cerr << "[WARN] No pudo cargar assets/textures/bullet_2.png\n";
     if (!hasAlienTop)   std::cerr << "[WARN] No pudo cargar assets/textures/alien_top.png\n";
     if (!hasAlienMid)   std::cerr << "[WARN] No pudo cargar assets/textures/alien_mid.png\n";
     if (!hasAlienBot)   std::cerr << "[WARN] No pudo cargar assets/textures/alien_bottom.png\n";
-    if (!hasBulletTex)  std::cerr << "[WARN] No pudo cargar assets/textures/bullet.png\n";
     if (!hasBgTex)      std::cerr << "[WARN] No pudo cargar assets/textures/background.png\n";
+    if (!hasShieldTex)  std::cerr << "[WARN] No pudo cargar assets/textures/shield.png\n";
     if (!hasFont)       std::cerr << "[WARN] No pudo cargar assets/fonts/font.ttf\n";
 
     sf::SoundBuffer laserBuf;
     std::optional<sf::Sound> laserSound;
     if (laserBuf.loadFromFile("assets/sounds/laser_sound.mp3")) {
         laserSound.emplace(laserBuf);
-        std::cout << "[INFO] Cargado sonido laser: assets/sounds/laser_sound.mp3\n";
-    } else {
-        std::cerr << "[WARN] No se pudo cargar assets/sounds/laser_sound.mp3\n";
     }
 
     std::unique_ptr<sf::Sprite> bgSprite;
@@ -92,16 +94,12 @@ int main() {
     const size_t BULLET_POOL_SIZE = 64;
     std::vector<Bullet> bullets;
     bullets.reserve(BULLET_POOL_SIZE);
-    for (size_t i = 0; i < BULLET_POOL_SIZE; ++i) {
-        bullets.emplace_back(hasBulletTex ? &texBullet : nullptr);
-    }
+    for (size_t i = 0; i < BULLET_POOL_SIZE; ++i) bullets.emplace_back(hasBulletPlayer ? &texBulletPlayer : nullptr);
 
     const size_t ENEMY_BULLET_POOL_SIZE = 32;
     std::vector<Bullet> enemyBullets;
     enemyBullets.reserve(ENEMY_BULLET_POOL_SIZE);
-    for (size_t i = 0; i < ENEMY_BULLET_POOL_SIZE; ++i) {
-        enemyBullets.emplace_back(hasBulletTex ? &texBullet : nullptr);
-    }
+    for (size_t i = 0; i < ENEMY_BULLET_POOL_SIZE; ++i) enemyBullets.emplace_back(hasBulletEnemy ? &texBulletEnemy : nullptr);
 
     const int ENEMY_COLS = 11;
     const int ENEMY_ROWS = 5;
@@ -136,6 +134,8 @@ int main() {
         livesText->setPosition({ MARGIN.x + 200.f, MARGIN.y + 8.f });
     }
 
+    std::vector<Shield> shields;
+
     sf::Clock clock;
     float dt = 0.f;
 
@@ -162,12 +162,23 @@ int main() {
         }
         return false;
     };
-
+    const int SHIELD_HP = 5;
     auto resetGame = [&]() {
         player.setPosition(playerStart);
         formation.reset();
         for (auto &b : bullets) b.deactivate();
         for (auto &b : enemyBullets) b.deactivate();
+        shields.clear();
+        if (hasShieldTex) {
+            float shieldsY = playerStart.y - 120.f;
+            float gap = static_cast<float>(windowWidth) / 4.f;
+            float centerX = static_cast<float>(windowWidth) / 2.f;
+            sf::Vector2f desiredSize1{ 100.f, 50.f };
+            sf::Vector2f desiredSize2{ 100.f, 50.f };
+            shields.emplace_back(&texShield, sf::Vector2f{ centerX - gap - desiredSize1.x / 2.f, shieldsY }, SHIELD_HP, desiredSize1);
+            shields.emplace_back(&texShield, sf::Vector2f{ centerX - desiredSize2.x / 2.f, shieldsY }, SHIELD_HP, desiredSize2);
+            shields.emplace_back(&texShield, sf::Vector2f{ centerX + gap - desiredSize1.x / 2.f, shieldsY }, SHIELD_HP, desiredSize1);
+        }
     };
 
     std::mt19937 rng(static_cast<unsigned int>(std::random_device{}()));
@@ -212,17 +223,6 @@ int main() {
             if (state == AppState::Menu) {
                 menu.processEvent(ev, window);
             } else {
-                if (ev.is<sf::Event::KeyPressed>()) {
-                    const auto* k = ev.getIf<sf::Event::KeyPressed>();
-                    if (!k) continue;
-                    if (k->code == sf::Keyboard::Key::R) {
-                        resetGame();
-                        score = 0;
-                        lives = 3;
-                        if (scoreText) scoreText->setString("Score: 0");
-                        if (livesText) livesText->setString("Lives: " + std::to_string(lives));
-                    }
-                }
             }
         }
 
@@ -284,6 +284,16 @@ int main() {
 
             for (auto &b : bullets) {
                 if (!b.isActive()) continue;
+                bool hitShield = false;
+                for (auto &s : shields) {
+                    if (!s.isActive()) continue;
+                    if (rectsIntersect(s.bounds(), b.bounds())) {
+                        b.deactivate();
+                        hitShield = true;
+                        break;
+                    }
+                }
+                if (hitShield) continue;
                 for (auto &e : formation.enemies()) {
                     if (!e.isActive()) continue;
                     if (rectsIntersect(b.bounds(), e.bounds())) {
@@ -298,6 +308,17 @@ int main() {
 
             for (auto &b : enemyBullets) {
                 if (!b.isActive()) continue;
+                bool hitShield = false;
+                for (auto &s : shields) {
+                    if (!s.isActive()) continue;
+                    if (rectsIntersect(s.bounds(), b.bounds())) {
+                        b.deactivate();
+                        s.takeDamage(1);
+                        hitShield = true;
+                        break;
+                    }
+                }
+                if (hitShield) continue;
                 if (rectsIntersect(b.bounds(), player.bounds())) {
                     b.deactivate();
                     lives -= 1;
@@ -313,6 +334,15 @@ int main() {
 
             for (auto &e : formation.enemies()) {
                 if (!e.isActive()) continue;
+                bool collidedWithShield = false;
+                for (auto &s : shields) {
+                    if (!s.isActive()) continue;
+                    if (rectsIntersect(s.bounds(), e.bounds())) {
+                        collidedWithShield = true;
+                        break;
+                    }
+                }
+                if (collidedWithShield) continue;
                 if (rectsIntersect(e.bounds(), player.bounds())) {
                     e.setActive(false);
                     lives -= 1;
@@ -329,20 +359,15 @@ int main() {
 
         window.clear(sf::Color(18, 18, 28));
 
-        if (bgSprite) {
-            window.draw(*bgSprite);
-        }
+        if (bgSprite) window.draw(*bgSprite);
 
         if (state == AppState::Menu) {
             menu.draw(window);
         } else {
+            for (auto &s : shields) s.draw(window);
             formation.draw(window);
-            for (auto &b : bullets) {
-                if (b.isActive()) b.draw(window);
-            }
-            for (auto &b : enemyBullets) {
-                if (b.isActive()) b.draw(window);
-            }
+            for (auto &b : bullets) if (b.isActive()) b.draw(window);
+            for (auto &b : enemyBullets) if (b.isActive()) b.draw(window);
             player.draw(window);
             if (scoreText) window.draw(*scoreText);
             if (livesText) window.draw(*livesText);

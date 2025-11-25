@@ -1,8 +1,8 @@
 #include "Player.h"
 #include <memory>
 
-static constexpr float TARGET_PLAYER_W = 60.f; // ancho
-static constexpr float TARGET_PLAYER_H = 60.f; // alto
+static constexpr float TARGET_PLAYER_W = 50.f; // ancho
+static constexpr float TARGET_PLAYER_H = 50.f; // alto
 
 Player::Player(const sf::Texture* texture, const sf::Vector2f& startPos)
     : position_(startPos)
