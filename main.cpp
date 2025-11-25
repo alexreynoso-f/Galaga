@@ -30,9 +30,47 @@ int main() {
     unsigned int windowWidth = static_cast<unsigned int>(MARGIN.x * 2 + WINDOW_COLS * CELL_SIZE);
     unsigned int windowHeight = static_cast<unsigned int>(MARGIN.y + HUD_HEIGHT + WINDOW_ROWS * CELL_SIZE + MARGIN.y);
 
+    // VIRTUAL size (logical/game coordinate space). We keep the game content layout tied to this.
+    const unsigned int VIRTUAL_WIDTH = windowWidth;
+    const unsigned int VIRTUAL_HEIGHT = windowHeight;
+
+    // Maximum content width the game will expand to. If the window becomes wider than this,
+    // the game content will not stretch further; instead we'll center it with side bars.
+    const unsigned int MAX_CONTENT_WIDTH = 1280u;
+
     sf::RenderWindow window(sf::VideoMode({ windowWidth, windowHeight }), "Naves");
     window.setVerticalSyncEnabled(true);
 
+    // Create a view for rendering the game world in VIRTUAL coordinates and a letterbox/centered viewport
+    // SFML 3: sf::FloatRect uses a (position, size) constructor (two vectors).
+    sf::View gameView(sf::FloatRect({0.f, 0.f}, {static_cast<float>(VIRTUAL_WIDTH), static_cast<float>(VIRTUAL_HEIGHT)}));
+
+    auto updateGameViewForWindow = [&](unsigned int winW, unsigned int winH) {
+        // Compute scaleX but clamp based on MAX_CONTENT_WIDTH to avoid overly wide stretching
+        float scaleX = static_cast<float>(winW) / static_cast<float>(VIRTUAL_WIDTH);
+        if (winW > MAX_CONTENT_WIDTH) {
+            scaleX = static_cast<float>(MAX_CONTENT_WIDTH) / static_cast<float>(VIRTUAL_WIDTH);
+        }
+        float scaleY = static_cast<float>(winH) / static_cast<float>(VIRTUAL_HEIGHT);
+
+        // choose the scale that fits entirely (letterbox)
+        float scale = std::min(scaleX, scaleY);
+
+        float viewWpx = static_cast<float>(VIRTUAL_WIDTH) * scale;
+        float viewHpx = static_cast<float>(VIRTUAL_HEIGHT) * scale;
+
+        float vpW = viewWpx / static_cast<float>(winW);
+        float vpH = viewHpx / static_cast<float>(winH);
+        float vpL = (1.f - vpW) * 0.5f;
+        float vpT = (1.f - vpH) * 0.5f;
+
+        // SFML 3: construct FloatRect with two vectors
+        gameView.setViewport(sf::FloatRect({vpL, vpT}, {vpW, vpH}));
+    };
+
+    updateGameViewForWindow(window.getSize().x, window.getSize().y);
+
+    // --- assets ---
     sf::Texture texPlayer, texBulletPlayer, texBulletEnemy;
     sf::Texture texAlienTop, texAlienMid, texAlienBot, texShield;
     sf::Font font;
@@ -54,6 +92,43 @@ int main() {
     if (!hasShieldTex)  std::cerr << "[WARN] No pudo cargar assets/textures/shield.png\n";
     if (!hasFont)       std::cerr << "[WARN] No pudo cargar assets/fonts/font.ttf\n";
 
+    // --- music ---
+    sf::Music bgMusic;
+    bool hasMusic = false;
+    bool musicOn = false;
+    if (bgMusic.openFromFile("assets/music/bg_music.ogg")) {
+        // Use the SFML API available in your build: setLooping is present there
+        bgMusic.setLooping(true);
+        bgMusic.play();
+        hasMusic = true;
+        musicOn = true;
+    } else {
+        std::cerr << "[WARN] Could not load assets/music/bg_music.ogg. Music disabled.\n";
+    }
+
+    // UI: music toggle button (drawn in default view, upper-left)
+    sf::RectangleShape musicBtn;
+    musicBtn.setSize({48.f, 48.f});
+    // SFML setPosition takes a single Vector2f in this build
+    musicBtn.setPosition(MARGIN);
+    musicBtn.setFillColor(sf::Color(40, 40, 50));
+    musicBtn.setOutlineColor(sf::Color(200, 200, 200));
+    musicBtn.setOutlineThickness(-2.f);
+
+    // music icon text — sf::Text does not have a default ctor in this SFML build
+    std::optional<sf::Text> musicIcon;
+    if (hasFont) {
+        musicIcon.emplace(font, musicOn ? "Off" : "On", 22);
+        musicIcon->setFillColor(sf::Color::White);
+        auto rt = musicIcon->getLocalBounds();
+        float ox = rt.position.x + rt.size.x * 0.5f;
+        float oy = rt.position.y + rt.size.y * 0.5f;
+        musicIcon->setOrigin({ox, oy});
+        sf::Vector2f bpos = musicBtn.getPosition();
+        sf::Vector2f bsize = musicBtn.getSize();
+        musicIcon->setPosition({ bpos.x + bsize.x * 0.5f, bpos.y + bsize.y * 0.5f });
+    }
+
     sf::SoundBuffer laserBuf;
     std::optional<sf::Sound> laserSound;
     if (laserBuf.loadFromFile("assets/sounds/laser_sound.mp3")) {
@@ -61,10 +136,10 @@ int main() {
     }
 
     Menu menu(hasFont ? &font : nullptr, 80);
-    menu.setOptions({ "NEW GAME", "EXIT" }, { static_cast<float>(windowWidth) / 2.f, static_cast<float>(windowHeight) / 2.f }, 140.f);
+    menu.setOptions({ "NEW GAME", "EXIT" }, { static_cast<float>(VIRTUAL_WIDTH) / 2.f, static_cast<float>(VIRTUAL_HEIGHT) / 2.f }, 140.f);
 
     Menu pauseMenu(hasFont ? &font : nullptr, 56);
-    pauseMenu.setOptions({ "RESUME", "RESTART", "EXIT TO MENU" }, { static_cast<float>(windowWidth) / 2.f, static_cast<float>(windowHeight) / 2.f }, 96.f);
+    pauseMenu.setOptions({ "RESUME", "RESTART", "EXIT TO MENU" }, { static_cast<float>(VIRTUAL_WIDTH) / 2.f, static_cast<float>(VIRTUAL_HEIGHT) / 2.f }, 96.f);
 
     enum class AppState { Menu, Playing };
     AppState state = AppState::Menu;
@@ -75,7 +150,7 @@ int main() {
     };
     Player player(hasPlayerTex ? &texPlayer : nullptr, playerStart);
     float leftMargin = 16.f;
-    float rightMargin = static_cast<float>(windowWidth);
+    float rightMargin = static_cast<float>(VIRTUAL_WIDTH);
     player.setHorizontalLimits(leftMargin, rightMargin);
 
     const size_t BULLET_POOL_SIZE = 64;
@@ -158,7 +233,7 @@ int main() {
         float shieldsY = playerStart.y - 120.f;
         sf::Vector2f desiredSize{ 140.f, 70.f };
         float padding = 48.f;
-        float available = static_cast<float>(windowWidth) - 2.f * padding;
+        float available = static_cast<float>(VIRTUAL_WIDTH) - 2.f * padding;
         float totalW = 4.f * desiredSize.x;
         float gapBetween = 0.f;
         if (available > totalW) {
@@ -226,6 +301,52 @@ int main() {
                     }
                 }
             }
+
+            // handle resize: update view viewport
+            if (ev.is<sf::Event::Resized>()) {
+                auto r = ev.getIf<sf::Event::Resized>();
+                if (r) {
+                    // SFML 3: Resized event stores .size (vector)
+                    updateGameViewForWindow(static_cast<unsigned int>(r->size.x), static_cast<unsigned int>(r->size.y));
+                }
+            }
+
+            // handle mouse clicks for music button and menus
+            if (ev.is<sf::Event::MouseButtonPressed>()) {
+                auto mb = ev.getIf<sf::Event::MouseButtonPressed>();
+                if (mb && mb->button == sf::Mouse::Button::Left) {
+                    // use current mouse position relative to the window (default view coordinates)
+                    sf::Vector2i pix = sf::Mouse::getPosition(window);
+                    sf::Vector2f mp = window.mapPixelToCoords(pix);
+                    // music button check (button drawn in default view region)
+                    if (musicBtn.getGlobalBounds().contains(mp)) {
+                        if (hasMusic) {
+                            if (musicOn) {
+                                bgMusic.pause();
+                                musicOn = false;
+                            } else {
+                                bgMusic.play();
+                                musicOn = true;
+                            }
+                            if (musicIcon) {
+                                musicIcon->setString(musicOn ? "Off" : "On");
+                                auto rt = musicIcon->getLocalBounds();
+                                float ox = rt.position.x + rt.size.x * 0.5f;
+                                float oy = rt.position.y + rt.size.y * 0.5f;
+                                musicIcon->setOrigin({ox, oy});
+                                sf::Vector2f bpos = musicBtn.getPosition();
+                                sf::Vector2f bsize = musicBtn.getSize();
+                                musicIcon->setPosition({ bpos.x + bsize.x * 0.5f, bpos.y + bsize.y * 0.5f });
+                            }
+                        } else {
+                            // no music loaded: toggle visual state only
+                            musicOn = !musicOn;
+                            if (musicIcon) musicIcon->setString(musicOn ? "Off" : "On");
+                        }
+                    }
+                }
+            }
+
             if (state == AppState::Menu) {
                 menu.processEvent(ev, window);
             } else {
@@ -294,7 +415,7 @@ int main() {
                 player.update(dt);
                 for (auto &b : bullets) b.update(dt);
                 for (auto &b : enemyBullets) b.update(dt);
-                formation->update(dt, MARGIN.x, static_cast<float>(windowWidth) - MARGIN.x);
+                formation->update(dt, MARGIN.x, static_cast<float>(VIRTUAL_WIDTH) - MARGIN.x);
 
                 enemyShootTimer -= dt;
                 if (enemyShootTimer <= 0.f) {
@@ -355,16 +476,6 @@ int main() {
                                 overlayTitle->setString(resultMessage);
                                 overlayTitle->setFillColor(sf::Color::Red);
                                 overlaySub->setString("Press ENTER to restart");
-                                sf::FloatRect rt = overlayTitle->getLocalBounds();
-                                float ox = rt.position.x + rt.size.x * 0.5f;
-                                float oy = rt.position.y + rt.size.y * 0.5f;
-                                overlayTitle->setOrigin(sf::Vector2f(ox, oy));
-                                overlayTitle->setPosition(sf::Vector2f(static_cast<float>(windowWidth)/2.f, static_cast<float>(windowHeight)/2.f - 24.f));
-                                sf::FloatRect rs = overlaySub->getLocalBounds();
-                                float sox = rs.position.x + rs.size.x * 0.5f;
-                                float soy = rs.position.y + rs.size.y * 0.5f;
-                                overlaySub->setOrigin(sf::Vector2f(sox, soy));
-                                overlaySub->setPosition(sf::Vector2f(static_cast<float>(windowWidth)/2.f, static_cast<float>(windowHeight)/2.f + 40.f));
                             }
                         } else {
                             player.setPosition(playerStart);
@@ -382,16 +493,6 @@ int main() {
                             overlayTitle->setString(resultMessage);
                             overlayTitle->setFillColor(sf::Color::Red);
                             overlaySub->setString("Press ENTER to restart");
-                            sf::FloatRect rt = overlayTitle->getLocalBounds();
-                            float ox = rt.position.x + rt.size.x * 0.5f;
-                            float oy = rt.position.y + rt.size.y * 0.5f;
-                            overlayTitle->setOrigin(sf::Vector2f(ox, oy));
-                            overlayTitle->setPosition(sf::Vector2f(static_cast<float>(windowWidth)/2.f, static_cast<float>(windowHeight)/2.f - 24.f));
-                            sf::FloatRect rs = overlaySub->getLocalBounds();
-                            float sox = rs.position.x + rs.size.x * 0.5f;
-                            float soy = rs.position.y + rs.size.y * 0.5f;
-                            overlaySub->setOrigin(sf::Vector2f(sox, soy));
-                            overlaySub->setPosition(sf::Vector2f(static_cast<float>(windowWidth)/2.f, static_cast<float>(windowHeight)/2.f + 40.f));
                         }
                         break;
                     }
@@ -407,16 +508,6 @@ int main() {
                             overlayTitle->setString(resultMessage);
                             overlayTitle->setFillColor(sf::Color::Yellow);
                             overlaySub->setString("Press ENTER to restart");
-                            sf::FloatRect rt = overlayTitle->getLocalBounds();
-                            float ox = rt.position.x + rt.size.x * 0.5f;
-                            float oy = rt.position.y + rt.size.y * 0.5f;
-                            overlayTitle->setOrigin(sf::Vector2f(ox, oy));
-                            overlayTitle->setPosition(sf::Vector2f(static_cast<float>(windowWidth)/2.f, static_cast<float>(windowHeight)/2.f - 24.f));
-                            sf::FloatRect rs = overlaySub->getLocalBounds();
-                            float sox = rs.position.x + rs.size.x * 0.5f;
-                            float soy = rs.position.y + rs.size.y * 0.5f;
-                            overlaySub->setOrigin(sf::Vector2f(sox, soy));
-                            overlaySub->setPosition(sf::Vector2f(static_cast<float>(windowWidth)/2.f, static_cast<float>(windowHeight)/2.f + 40.f));
                         }
                     }
                 }
@@ -425,38 +516,68 @@ int main() {
 
         window.clear(sf::Color(18, 18, 28));
 
+        // Draw menu with default view (full-window)
         if (state == AppState::Menu) {
+            window.setView(window.getDefaultView());
             menu.draw(window);
         } else {
+            // Draw game world using gameView (letterboxed / centered, capped width)
+            window.setView(gameView);
+
             for (auto &s : shields) s.draw(window);
             formation->draw(window);
             for (auto &b : bullets) if (b.isActive()) b.draw(window);
             for (auto &b : enemyBullets) if (b.isActive()) b.draw(window);
             player.draw(window);
 
+            // After drawing the world, switch back to default view to draw HUD and menus anchored to the window
+            window.setView(window.getDefaultView());
+
+            // HUD (score / lives) - position based on current actual window size
+            sf::Vector2u curSize = window.getSize();
             if (scoreText) {
-                scoreText->setPosition(sf::Vector2f(MARGIN.x + 8.f, static_cast<float>(windowHeight) - MARGIN.y - scoreText->getGlobalBounds().size.y - 8.f));
+                scoreText->setPosition(sf::Vector2f(MARGIN.x + 8.f, static_cast<float>(curSize.y) - MARGIN.y - scoreText->getGlobalBounds().size.y - 8.f));
                 window.draw(*scoreText);
             }
             if (livesText) {
                 float lw = livesText->getGlobalBounds().size.x;
                 float lh = livesText->getGlobalBounds().size.y;
-                livesText->setPosition(sf::Vector2f(static_cast<float>(windowWidth) - MARGIN.x - 8.f - lw, static_cast<float>(windowHeight) - MARGIN.y - lh - 8.f));
+                livesText->setPosition(sf::Vector2f(static_cast<float>(curSize.x) - MARGIN.x - 8.f - lw, static_cast<float>(curSize.y) - MARGIN.y - lh - 8.f));
                 window.draw(*livesText);
             }
 
+            // Draw music toggle button (upper-left)
+            window.draw(musicBtn);
+            if (musicIcon) window.draw(*musicIcon);
+
+            // Pause menu overlay
             if (paused && !pausedForResult) {
-                sf::RectangleShape overlay(sf::Vector2f(static_cast<float>(windowWidth), static_cast<float>(windowHeight)));
+                sf::RectangleShape overlay(sf::Vector2f(static_cast<float>(curSize.x), static_cast<float>(curSize.y)));
                 overlay.setFillColor(sf::Color(0,0,0,160));
                 window.draw(overlay);
                 pauseMenu.draw(window);
             }
 
+            // End-game overlay (centered, placed now according to the actual window size)
             if (pausedForResult) {
-                sf::RectangleShape overlay(sf::Vector2f(static_cast<float>(windowWidth), static_cast<float>(windowHeight)));
+                sf::Vector2u cur = window.getSize();
+                sf::RectangleShape overlay(sf::Vector2f(static_cast<float>(cur.x), static_cast<float>(cur.y)));
                 overlay.setFillColor(sf::Color(0,0,0,160));
                 window.draw(overlay);
                 if (hasFont && overlayTitle && overlaySub) {
+                    // center texts on the actual window
+                    sf::FloatRect rt = overlayTitle->getLocalBounds();
+                    float ox = rt.position.x + rt.size.x * 0.5f;
+                    float oy = rt.position.y + rt.size.y * 0.5f;
+                    overlayTitle->setOrigin(sf::Vector2f(ox, oy));
+                    overlayTitle->setPosition(sf::Vector2f(static_cast<float>(cur.x)/2.f, static_cast<float>(cur.y)/2.f - 24.f));
+
+                    sf::FloatRect rs = overlaySub->getLocalBounds();
+                    float sox = rs.position.x + rs.size.x * 0.5f;
+                    float soy = rs.position.y + rs.size.y * 0.5f;
+                    overlaySub->setOrigin(sf::Vector2f(sox, soy));
+                    overlaySub->setPosition(sf::Vector2f(static_cast<float>(cur.x)/2.f, static_cast<float>(cur.y)/2.f + 40.f));
+
                     window.draw(*overlayTitle);
                     window.draw(*overlaySub);
                 }
