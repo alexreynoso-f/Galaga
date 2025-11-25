@@ -32,6 +32,8 @@ add_executable(Galaga
         include/Enemy.h
         src/menu.cpp
         include/menu.h
+        src/Formation.cpp
+        include/Formation.h
 )
 
 # 🎵 Ruta para acceder a assets en runtime (NO COMPILA, solo referencia)
