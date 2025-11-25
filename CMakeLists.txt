@@ -31,7 +31,7 @@ add_executable(Galaga
         src/Enemy.cpp
         include/Enemy.h
         src/menu.cpp
-        include/menu.h
+        include/Menu.h
         src/Formation.cpp
         include/Formation.h
         src/Shield.cpp
