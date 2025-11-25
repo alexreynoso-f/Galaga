@@ -45,7 +45,6 @@ int main() {
     bool hasAlienBot  = texAlienBot.loadFromFile("assets/textures/alien_bottom.png");
     bool hasBgTex     = texBackground.loadFromFile("assets/textures/background.png");
     bool hasShieldTex = texShield.loadFromFile("assets/textures/shield.png");
-    bool hasMenuBg    = texMenuBg.loadFromFile("assets/menu/menu_bg.png"); // load menu image
     bool hasFont      = font.openFromFile("assets/fonts/font.ttf");
 
     if (!hasPlayerTex)  std::cerr << "[WARN] No pudo cargar assets/textures/player.png\n";
@@ -56,7 +55,6 @@ int main() {
     if (!hasAlienBot)   std::cerr << "[WARN] No pudo cargar assets/textures/alien_bottom.png\n";
     if (!hasBgTex)      std::cerr << "[WARN] No pudo cargar assets/textures/background.png\n";
     if (!hasShieldTex)  std::cerr << "[WARN] No pudo cargar assets/textures/shield.png\n";
-    if (!hasMenuBg)     std::cerr << "[WARN] No pudo cargar assets/menu/menu_bg.png\n";
     if (!hasFont)       std::cerr << "[WARN] No pudo cargar assets/fonts/font.ttf\n";
 
     sf::SoundBuffer laserBuf;
@@ -79,9 +77,7 @@ int main() {
         }
     }
 
-    // Menu: create with larger font size and centered options
-    Menu menu(hasFont ? &font : nullptr, 80); // increased character size to 80
-    if (hasMenuBg) menu.setBackground(&texMenuBg);
+    Menu menu(hasFont ? &font : nullptr, 80);
     menu.setOptions({ "NEW GAME", "EXIT" }, { static_cast<float>(windowWidth) / 2.f, static_cast<float>(windowHeight) / 2.f }, 140.f);
 
     enum class AppState { Menu, Playing };
