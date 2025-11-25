@@ -35,7 +35,6 @@ int main() {
 
     sf::Texture texPlayer, texBulletPlayer, texBulletEnemy;
     sf::Texture texAlienTop, texAlienMid, texAlienBot, texShield;
-    sf::Texture texMenuBg;
     sf::Font font;
     bool hasPlayerTex = texPlayer.loadFromFile("assets/textures/player.png");
     bool hasBulletPlayer = texBulletPlayer.loadFromFile("assets/textures/bullet.png");
@@ -63,6 +62,9 @@ int main() {
 
     Menu menu(hasFont ? &font : nullptr, 80);
     menu.setOptions({ "NEW GAME", "EXIT" }, { static_cast<float>(windowWidth) / 2.f, static_cast<float>(windowHeight) / 2.f }, 140.f);
+
+    Menu pauseMenu(hasFont ? &font : nullptr, 56);
+    pauseMenu.setOptions({ "RESUME", "RESTART", "EXIT TO MENU" }, { static_cast<float>(windowWidth) / 2.f, static_cast<float>(windowHeight) / 2.f }, 96.f);
 
     enum class AppState { Menu, Playing };
     AppState state = AppState::Menu;
@@ -132,6 +134,7 @@ int main() {
     const int SHIELD_HP = 5;
 
     bool pausedForResult = false;
+    bool paused = false;
     std::string resultMessage;
     std::optional<sf::Text> overlayTitle;
     std::optional<sf::Text> overlaySub;
@@ -150,6 +153,7 @@ int main() {
         shields.clear();
         pausedForResult = false;
         resultMessage.clear();
+        paused = false;
 
         float shieldsY = playerStart.y - 120.f;
         sf::Vector2f desiredSize{ 140.f, 70.f };
@@ -177,8 +181,8 @@ int main() {
     };
 
     std::mt19937 rng(static_cast<unsigned int>(std::random_device{}()));
-    const float ENEMY_SHOOT_INTERVAL_MIN = 0.9f;
-    const float ENEMY_SHOOT_INTERVAL_MAX = 2.0f;
+    const float ENEMY_SHOOT_INTERVAL_MIN = 0.8f;
+    const float ENEMY_SHOOT_INTERVAL_MAX = 1.8f;
     std::uniform_real_distribution<float> shootIntervalDist(ENEMY_SHOOT_INTERVAL_MIN, ENEMY_SHOOT_INTERVAL_MAX);
     std::uniform_int_distribution<int> colDist(0, ENEMY_COLS - 1);
     float enemyShootTimer = shootIntervalDist(rng);
@@ -209,17 +213,25 @@ int main() {
                 break;
             }
             if (ev.is<sf::Event::KeyPressed>()) {
-                const auto* k = ev.getIf<sf::Event::KeyPressed>();
+                auto k = ev.getIf<sf::Event::KeyPressed>();
                 if (k) {
                     if (state == AppState::Playing && pausedForResult) {
                         if (k->code == sf::Keyboard::Key::Enter || k->code == sf::Keyboard::Key::Space) {
                             resetGame();
+                        }
+                    } else if (state == AppState::Playing && !pausedForResult) {
+                        if (k->code == sf::Keyboard::Key::Escape) {
+                            paused = !paused;
                         }
                     }
                 }
             }
             if (state == AppState::Menu) {
                 menu.processEvent(ev, window);
+            } else {
+                if (paused && !pausedForResult) {
+                    pauseMenu.processEvent(ev, window);
+                }
             }
         }
 
@@ -238,7 +250,21 @@ int main() {
                 }
             }
         } else {
-            if (!pausedForResult) {
+            if (paused && !pausedForResult) {
+                pauseMenu.update(dt);
+                if (pauseMenu.consumeConfirm()) {
+                    int sel = pauseMenu.getSelectedIndex();
+                    if (sel == 0) {
+                        paused = false;
+                    } else if (sel == 1) {
+                        resetGame();
+                        state = AppState::Playing;
+                    } else if (sel == 2) {
+                        paused = false;
+                        state = AppState::Menu;
+                    }
+                }
+            } else if (!paused && !pausedForResult) {
                 shootTimer -= dt;
                 if (shootTimer < 0.f) shootTimer = 0.f;
 
@@ -327,6 +353,7 @@ int main() {
                             resultMessage = "GAME OVER";
                             if (hasFont) {
                                 overlayTitle->setString(resultMessage);
+                                overlayTitle->setFillColor(sf::Color::Red);
                                 overlaySub->setString("Press ENTER to restart");
                                 sf::FloatRect rt = overlayTitle->getLocalBounds();
                                 float ox = rt.position.x + rt.size.x * 0.5f;
@@ -353,6 +380,7 @@ int main() {
                         resultMessage = "GAME OVER";
                         if (hasFont) {
                             overlayTitle->setString(resultMessage);
+                            overlayTitle->setFillColor(sf::Color::Red);
                             overlaySub->setString("Press ENTER to restart");
                             sf::FloatRect rt = overlayTitle->getLocalBounds();
                             float ox = rt.position.x + rt.size.x * 0.5f;
@@ -377,6 +405,7 @@ int main() {
                         resultMessage = "YOU WIN";
                         if (hasFont) {
                             overlayTitle->setString(resultMessage);
+                            overlayTitle->setFillColor(sf::Color::Yellow);
                             overlaySub->setString("Press ENTER to restart");
                             sf::FloatRect rt = overlayTitle->getLocalBounds();
                             float ox = rt.position.x + rt.size.x * 0.5f;
@@ -414,6 +443,13 @@ int main() {
                 float lh = livesText->getGlobalBounds().size.y;
                 livesText->setPosition(sf::Vector2f(static_cast<float>(windowWidth) - MARGIN.x - 8.f - lw, static_cast<float>(windowHeight) - MARGIN.y - lh - 8.f));
                 window.draw(*livesText);
+            }
+
+            if (paused && !pausedForResult) {
+                sf::RectangleShape overlay(sf::Vector2f(static_cast<float>(windowWidth), static_cast<float>(windowHeight)));
+                overlay.setFillColor(sf::Color(0,0,0,160));
+                window.draw(overlay);
+                pauseMenu.draw(window);
             }
 
             if (pausedForResult) {
