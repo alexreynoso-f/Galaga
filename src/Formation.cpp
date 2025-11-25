@@ -84,7 +84,7 @@ void Formation::update(float dt, float screenLeft, float screenRight) {
             if (e.isActive()) e.moveBy({ 0.f, dropAmount_ });
         }
         // aumentar velocidad
-        speed_ *= 1.1f;
+        speed_ *= 1.07f;
         computeBounds();
     }
 }
