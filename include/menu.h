@@ -40,9 +40,9 @@ private:
     const sf::Font* font_;
     unsigned int charSize_;
 
-    // texts_ solo se usa si font_ != nullptr; otherwise remain empty.
+
     std::vector<sf::Text> texts_;
-    std::vector<sf::RectangleShape> backRects_; // rectángulos de fondo para resaltar
+    std::vector<sf::RectangleShape> backRects_;
     std::vector<std::string> options_;
 
     sf::Vector2f position_;

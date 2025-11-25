@@ -1,4 +1,3 @@
-// src/Enemy.h
 #pragma once
 #include <SFML/Graphics.hpp>
 
@@ -14,12 +13,14 @@ public:
     sf::FloatRect bounds() const;
     void setPosition(const sf::Vector2f& pos);
 
+    sf::Vector2f getPosition() const;
+    void moveBy(const sf::Vector2f& delta);
+
 private:
     std::unique_ptr<sf::Sprite> sprite_;
     sf::RectangleShape fallbackRect_;
     bool active_ = true;
 
-    // simple oscillation
     float speedX_ = 80.f;
     int dir_ = 1; // 1 right, -1 left
     float leftLimit_ = 20.f;

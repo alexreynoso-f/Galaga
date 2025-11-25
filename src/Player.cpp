@@ -1,4 +1,3 @@
-// src/Player.cpp
 #include "Player.h"
 #include <memory>
 
@@ -12,13 +11,11 @@ Player::Player(const sf::Texture* texture, const sf::Vector2f& startPos)
         sprite_ = std::make_unique<sf::Sprite>(*texture);
         auto local = sprite_->getLocalBounds();
 
-        // calcular escala para que el sprite quepa en la caja objetivo (manteniendo aspect ratio)
         float scaleX = TARGET_PLAYER_W / local.size.x;
         float scaleY = TARGET_PLAYER_H / local.size.y;
         float scale = std::min(scaleX, scaleY);
         sprite_->setScale({ scale, scale });
 
-        // centrar origen en el sprite
         auto newLocal = sprite_->getLocalBounds();
         sprite_->setOrigin({ newLocal.size.x / 2.f, newLocal.size.y / 2.f });
         sprite_->setPosition(position_);

@@ -24,7 +24,6 @@ void Menu::setOptions(const std::vector<std::string>& options,
         rect.setFillColor(bgColor_);
         backRects_.push_back(std::move(rect));
 
-        // texto solo si hay fuente disponible
         if (font_) {
             sf::Text t(*font_, options[i], charSize_);
             // Ajuste de origen para centrar el texto (local bounds)
@@ -36,13 +35,11 @@ void Menu::setOptions(const std::vector<std::string>& options,
         }
     }
 
-    // inicializar selección
     selectedIndex_ = 0;
     confirmRequested_ = false;
 }
 
 void Menu::processEvent(const sf::Event& ev, const sf::RenderWindow& window) {
-    // Navegación por teclado
     if (ev.is<sf::Event::KeyPressed>()) {
         const auto* k = ev.getIf<sf::Event::KeyPressed>();
         if (!k) return;
@@ -59,11 +56,9 @@ void Menu::processEvent(const sf::Event& ev, const sf::RenderWindow& window) {
         }
     }
 
-    // Interacción con ratón: hover + click
     sf::Vector2i mousePixel = sf::Mouse::getPosition(window);
     sf::Vector2f mouseWorld = window.mapPixelToCoords(mousePixel);
 
-    // hover: buscar item que contenga mouse
     for (size_t i = 0; i < backRects_.size(); ++i) {
         sf::FloatRect r = itemGlobalBounds(i);
         if (pointInRect(mouseWorld, r)) {
@@ -85,7 +80,6 @@ void Menu::processEvent(const sf::Event& ev, const sf::RenderWindow& window) {
 }
 
 void Menu::update(float /*dt*/) {
-    // actualizar colores según selección
     for (size_t i = 0; i < backRects_.size(); ++i) {
         if (static_cast<int>(i) == selectedIndex_) {
             backRects_[i].setFillColor(selectedBgColor_);
@@ -102,7 +96,6 @@ void Menu::update(float /*dt*/) {
 }
 
 void Menu::draw(sf::RenderWindow& window) const {
-    // Dibuja los elementos (background + texto)
     for (size_t i = 0; i < backRects_.size(); ++i) {
         window.draw(backRects_[i]);
         if (font_ && i < texts_.size()) {

@@ -1,9 +1,9 @@
-// src/Enemy.cpp
 #include "Enemy.h"
 #include <memory>
 
-static constexpr float TARGET_ENEMY_W = 50.f;
-static constexpr float TARGET_ENEMY_H = 50.f;
+
+static constexpr float TARGET_ENEMY_W = 40.f;
+static constexpr float TARGET_ENEMY_H = 40.f;
 
 Enemy::Enemy(const sf::Texture* texture, const sf::Vector2f& startPos) {
     if (texture) {
@@ -30,22 +30,6 @@ Enemy::Enemy(const sf::Texture* texture, const sf::Vector2f& startPos) {
 
 void Enemy::update(float dt) {
     if (!active_) return;
-    float dx = dir_ * speedX_ * dt;
-    if (sprite_) sprite_->move(sf::Vector2f{dx, 0.f});
-    else fallbackRect_.move(sf::Vector2f{dx, 0.f});
-
-    // check bounds and reverse
-    sf::FloatRect r = bounds();
-    float cx = r.position.x + r.size.x / 2.f;
-    if (cx < leftLimit_) {
-        dir_ = 1;
-        if (sprite_) sprite_->move(sf::Vector2f{1.f, 6.f});
-        else fallbackRect_.move(sf::Vector2f{1.f, 6.f});
-    } else if (cx > rightLimit_) {
-        dir_ = -1;
-        if (sprite_) sprite_->move(sf::Vector2f{-1.f, 6.f});
-        else fallbackRect_.move(sf::Vector2f{-1.f, 6.f});
-    }
 }
 
 void Enemy::draw(sf::RenderWindow& window) const {
@@ -65,4 +49,14 @@ sf::FloatRect Enemy::bounds() const {
 void Enemy::setPosition(const sf::Vector2f& pos) {
     if (sprite_) sprite_->setPosition(pos);
     else fallbackRect_.setPosition(pos);
+}
+
+sf::Vector2f Enemy::getPosition() const {
+    if (sprite_) return sprite_->getPosition();
+    return fallbackRect_.getPosition();
+}
+
+void Enemy::moveBy(const sf::Vector2f& delta) {
+    if (sprite_) sprite_->move(delta);
+    else fallbackRect_.move(delta);
 }

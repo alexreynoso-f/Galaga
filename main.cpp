@@ -10,6 +10,7 @@
 #include "Bullet.h"
 #include "Enemy.h"
 #include "Menu.h"
+#include "Formation.h"
 
 static bool rectsIntersect(const sf::FloatRect& a, const sf::FloatRect& b) {
     return !(a.position.x + a.size.x < b.position.x ||
@@ -19,11 +20,10 @@ static bool rectsIntersect(const sf::FloatRect& a, const sf::FloatRect& b) {
 }
 
 int main() {
-    // --- Configuración de ventana y grid ---
     const int WINDOW_COLS = 20;
     const int WINDOW_ROWS = 25;
-    const int CELL_SIZE = 32; // px por célula
-    const float HUD_HEIGHT = 64.f;
+    const int CELL_SIZE = 32;
+    const float HUD_HEIGHT = 80.f;
     const sf::Vector2f MARGIN{12.f, 12.f};
 
     unsigned int windowWidth = static_cast<unsigned int>(MARGIN.x * 2 + WINDOW_COLS * CELL_SIZE);
@@ -32,32 +32,29 @@ int main() {
     sf::RenderWindow window(sf::VideoMode({ windowWidth, windowHeight }), "Space");
     window.setVerticalSyncEnabled(true);
 
-    // --- Cargar assets (texturas / fuente) ---
     sf::Texture texPlayer, texEnemy, texBullet, texBackground;
     sf::Font font;
+    sf::Texture texAlienTop, texAlienMid, texAlienBot;
+    bool hasAlienTop = texAlienTop.loadFromFile("assets/textures/alien_top.png");
+    bool hasAlienMid = texAlienMid.loadFromFile("assets/textures/alien_mid.png");
+    bool hasAlienBot = texAlienBot.loadFromFile("assets/textures/alien_bottom.png");
+
     bool hasPlayerTex = texPlayer.loadFromFile("assets/textures/player.png");
     bool hasEnemyTex  = texEnemy.loadFromFile("assets/textures/alien_bottom.png");
     bool hasBulletTex = texBullet.loadFromFile("assets/textures/bullet.png");
-    bool hasBgTex     = texBackground.loadFromFile("assets/textures/background.png");
+    bool hasBgTex     = texBackground.loadFromFile("assets/textures/background_2.png");
     bool hasFont      = font.openFromFile("assets/fonts/font.ttf");
 
-    if (!hasPlayerTex)  std::cerr << "[WARN] No pudo cargar assets/textures/player.png\n";
-    if (!hasEnemyTex)   std::cerr << "[WARN] No pudo cargar assets/textures/enemy.png\n";
-    if (!hasBulletTex)  std::cerr << "[WARN] No pudo cargar assets/textures/bullet_2.png\n";
-    if (!hasBgTex)      std::cerr << "[WARN] No pudo cargar assets/textures/background.png\n";
-    if (!hasFont)       std::cerr << "[WARN] No pudo cargar assets/fonts/font.ttf\n";
 
-    // --- Cargar sonido de laser (ruta fija) ---
     sf::SoundBuffer laserBuf;
     std::optional<sf::Sound> laserSound;
     if (laserBuf.loadFromFile("assets/sounds/laser_sound.mp3")) {
         laserSound.emplace(laserBuf);
-        std::cout << "[INFO] Cargado sonido laser: assets/sounds/laser_sound.mp3\n";
+        std::cout << "Cargado sonido laser: assets/sounds/laser_sound.mp3\n";
     } else {
-        std::cerr << "[WARN] No se pudo cargar assets/sounds/laser_sound.mp3\n";
+        std::cerr << "No se pudo cargar assets/sounds/laser_sound.mp3\n";
     }
 
-    // --- Preparar sprite de background (si se cargó) ---
     std::unique_ptr<sf::Sprite> bgSprite;
     if (hasBgTex) {
         bgSprite = std::make_unique<sf::Sprite>(texBackground);
@@ -72,14 +69,12 @@ int main() {
         }
     }
 
-    // --- Menu ---
     Menu menu(hasFont ? &font : nullptr, 36);
-    menu.setOptions({ "Play", "Exit" }, { static_cast<float>(windowWidth) / 2.f, 220.f }, 64.f);
+    menu.setOptions({ "Jugar", "Salir" }, { static_cast<float>(windowWidth) / 2.f, 220.f }, 64.f);
 
     enum class AppState { Menu, Playing };
     AppState state = AppState::Menu;
 
-    // --- Crear player ---
     sf::Vector2f playerStart{
         MARGIN.x + (WINDOW_COLS * CELL_SIZE) / 2.f,
         MARGIN.y + HUD_HEIGHT + (WINDOW_ROWS * CELL_SIZE) - CELL_SIZE * 1.5f
@@ -89,7 +84,6 @@ int main() {
     float rightMargin = static_cast<float>(windowWidth);
     player.setHorizontalLimits(leftMargin, rightMargin);
 
-    // --- Pool de balas  ---
     const size_t BULLET_POOL_SIZE = 64;
     std::vector<Bullet> bullets;
     bullets.reserve(BULLET_POOL_SIZE);
@@ -97,33 +91,31 @@ int main() {
         bullets.emplace_back(hasBulletTex ? &texBullet : nullptr);
     }
 
-    // --- Crear enemigos (formación inicial preparada en lambda resetGame) ---
-    std::vector<Enemy> enemies;
-    const int ENEMY_COLS = 3;
-    const int ENEMY_ROWS = 3;
+    const int ENEMY_COLS = 11;
+    const int ENEMY_ROWS = 5;
     const float formationStartX = MARGIN.x + 2.f * CELL_SIZE;
     const float formationStartY = MARGIN.y + HUD_HEIGHT + 1.f * CELL_SIZE;
-    const float spacingX = static_cast<float>(CELL_SIZE) * 1.6f;
-    const float spacingY = static_cast<float>(CELL_SIZE) * 1.1f;
+    const float spacingX = static_cast<float>(CELL_SIZE) * 1.5f;
+    const float spacingY = static_cast<float>(CELL_SIZE) * 1.15f;
+
+    Formation formation(
+        hasAlienTop ? &texAlienTop : nullptr,
+        hasAlienMid ? &texAlienMid : nullptr,
+        hasAlienBot ? &texAlienBot : nullptr,
+        ENEMY_COLS, ENEMY_ROWS,
+        sf::Vector2f{ formationStartX, formationStartY },
+        spacingX, spacingY,
+        /*speed*/ 40.f, /*dropAmount*/ 18.f
+    );
+
 
     auto resetGame = [&]() {
         player.setPosition(playerStart);
-        enemies.clear();
-        for (int r = 0; r < ENEMY_ROWS; ++r) {
-            for (int c = 0; c < ENEMY_COLS; ++c) {
-                sf::Vector2f pos{
-                    formationStartX + c * spacingX,
-                    formationStartY + r * spacingY
-                };
-                enemies.emplace_back(hasEnemyTex ? &texEnemy : nullptr, pos);
-            }
-        }
+        formation.reset();
         for (auto &b : bullets) b.deactivate();
     };
-    // prepare initial formation (but don't start playing until menu Play)
     resetGame();
 
-    // Score
     std::optional<sf::Text> scoreText;
     if (hasFont) {
         scoreText.emplace(font, "Score: 0", 35);
@@ -132,7 +124,6 @@ int main() {
     }
     int score = 0;
 
-    // --- Timing ---
     sf::Clock clock;
     float dt = 0.f;
 
@@ -147,9 +138,7 @@ int main() {
         }
     };
 
-    // --- Bucle principal ---
     while (window.isOpen()) {
-        // Eventos
         while (auto evOpt = window.pollEvent()) {
             const sf::Event& ev = *evOpt;
             if (ev.is<sf::Event::Closed>()) {
@@ -157,7 +146,6 @@ int main() {
                 break;
             }
 
-            // Always allow quitting with Escape
             if (ev.is<sf::Event::KeyPressed>()) {
                 const auto* k = ev.getIf<sf::Event::KeyPressed>();
                 if (k && k->code == sf::Keyboard::Key::Escape) {
@@ -166,10 +154,9 @@ int main() {
                 }
             }
 
-            // Route events to menu or game
             if (state == AppState::Menu) {
                 menu.processEvent(ev, window);
-            } else { // Playing
+            } else {
                 if (ev.is<sf::Event::KeyPressed>()) {
                     const auto* k = ev.getIf<sf::Event::KeyPressed>();
                     if (!k) continue;
@@ -184,12 +171,10 @@ int main() {
                     }
                 }
             }
-        } // fin pollEvent
+        }
 
-        // Delta time
         dt = clock.restart().asSeconds();
 
-        // If in menu, handle menu logic and check selection
         if (state == AppState::Menu) {
             menu.update(dt);
             if (menu.consumeConfirm()) {
@@ -204,7 +189,7 @@ int main() {
                     break;
                 }
             }
-        } else { // Playing: input continuo + updates
+        } else {
             if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Left) ||
                 sf::Keyboard::isKeyPressed(sf::Keyboard::Key::A)) {
                 player.moveLeft(dt);
@@ -213,15 +198,12 @@ int main() {
                 player.moveRight(dt);
             }
 
-            // Actualizaciones
             player.update(dt);
             for (auto &b : bullets) b.update(dt);
-            for (auto &e : enemies) e.update(dt);
-
-            // Colisiones: bullets vs enemies
+            formation.update(dt, /*screenLeft=*/MARGIN.x, /*screenRight=*/ static_cast<float>(windowWidth) - MARGIN.x);
             for (auto &b : bullets) {
                 if (!b.isActive()) continue;
-                for (auto &e : enemies) {
+                for (auto &e : formation.enemies()) {
                     if (!e.isActive()) continue;
                     if (rectsIntersect(b.bounds(), e.bounds())) {
                         b.deactivate();
@@ -233,8 +215,7 @@ int main() {
                 }
             }
 
-            // Colisiones: enemy vs player (simple)
-            for (auto &e : enemies) {
+            for (auto &e : formation.enemies()) {
                 if (!e.isActive()) continue;
                 if (rectsIntersect(e.bounds(), player.bounds())) {
                     e.setActive(false);
@@ -243,10 +224,8 @@ int main() {
             }
         }
 
-        // Dibujado
         window.clear(sf::Color(18, 18, 28));
 
-        // Draw background first (si cargado)
         if (bgSprite) {
             window.draw(*bgSprite);
         }
@@ -254,17 +233,11 @@ int main() {
         if (state == AppState::Menu) {
             menu.draw(window);
         } else {
-            // Draw enemies
-            for (auto &e : enemies) {
-                if (e.isActive()) e.draw(window);
-            }
-            // Draw bullets
+            formation.draw(window);
             for (auto &b : bullets) {
                 if (b.isActive()) b.draw(window);
             }
-            // Draw player
             player.draw(window);
-            // HUD
             if (scoreText) window.draw(*scoreText);
         }
 
