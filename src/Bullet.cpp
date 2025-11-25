@@ -1,8 +1,8 @@
 #include "Bullet.h"
 #include <memory>
 
-static constexpr float TARGET_BULLET_W = 20.f;
-static constexpr float TARGET_BULLET_H = 20.f;
+static constexpr float TARGET_BULLET_W = 15.f;
+static constexpr float TARGET_BULLET_H = 15.f;
 
 Bullet::Bullet(const sf::Texture* texture) {
     if (texture) {

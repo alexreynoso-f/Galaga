@@ -2,48 +2,57 @@
 #include <SFML/Graphics.hpp>
 #include <vector>
 #include <string>
-#include <optional>
+#include <memory>
 
 class Menu {
 public:
-    Menu(const sf::Font* font, unsigned int charSize = 36);
+    Menu(const sf::Font* font = nullptr, unsigned int charSize = 36);
 
-    void setOptions(const std::vector<std::string>& options,
-                    const sf::Vector2f& position,
-                    float spacing);
+    // options: textos de las opciones
+    // center: punto central horizontal a partir del cual se colocan las opciones verticalmente
+    // spacing: separación vertical entre opciones (px)
+    void setOptions(const std::vector<std::string>& options, const sf::Vector2f& center, float spacing);
 
-    void processEvent(const sf::Event& ev, const sf::RenderWindow& window);
+    // establece textura de fondo (puede ser nullptr)
+    void setBackground(const sf::Texture* tex);
 
+    // procesamiento de eventos (teclado/ratón)
+    void processEvent(const sf::Event& ev, sf::RenderWindow& window);
+
+    // update por frame (dt en segundos)
     void update(float dt);
 
+    // dibuja el menú (fondo, items, indicador)
     void draw(sf::RenderWindow& window) const;
 
-    int getSelectedIndex() const { return selectedIndex_; }
-
+    // cuando el usuario confirma (Enter o click), consumeConfirm devuelve true en el frame de la confirmación
     bool consumeConfirm();
 
-    void reset();
+    int getSelectedIndex() const;
 
 private:
     const sf::Font* font_;
     unsigned int charSize_;
+    std::vector<sf::Text> items_;
+    std::vector<std::string> labels_;
+    sf::Vector2f center_;
+    float spacing_ = 64.f;
+    int selected_ = 0;
 
+    // fondo opcional (gestión dinámica para evitar default ctor issues)
+    const sf::Texture* bgTex_ = nullptr;
+    mutable std::unique_ptr<sf::Sprite> bgSprite_;
 
-    std::vector<sf::Text> texts_;
-    std::vector<sf::RectangleShape> backRects_;
-    std::vector<std::string> options_;
+    // indicador triangular
+    sf::ConvexShape pointer_;
+    float pointerOffsetX_ = -48.f; // distancia relativa al borde izquierdo del texto
 
-    sf::Vector2f position_;
-    float spacing_ = 48.f;
+    // confirm flag
+    mutable bool confirmFlag_ = false;
 
-    int selectedIndex_ = 0;
-    bool confirmRequested_ = false;
+    // colores
+    sf::Color colorNormal_ = sf::Color(140, 140, 140);
+    sf::Color colorSelected_ = sf::Color(230, 230, 230);
 
-    sf::Color bgColor_{ 40, 40, 48, 200 };
-    sf::Color normalColor_{ 220, 220, 220 };
-    sf::Color selectedTextColor_{ 24, 24, 24 };
-    sf::Color selectedBgColor_{ 240, 200, 60 };
-
-    sf::FloatRect itemGlobalBounds(size_t i) const;
-    bool pointInRect(const sf::Vector2f& p, const sf::FloatRect& r) const;
+    void rebuild();
 };

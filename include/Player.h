@@ -22,7 +22,7 @@ private:
     std::unique_ptr<sf::Sprite> sprite_;
     sf::RectangleShape fallbackRect_;
     sf::Vector2f position_;
-    float speed_ = 200.f; // px/s
+    float speed_ = 150.f;
     float leftLimit_ = 16.f;
     float rightLimit_ = 800.f;
 };

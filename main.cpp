@@ -21,7 +21,7 @@ static bool rectsIntersect(const sf::FloatRect& a, const sf::FloatRect& b) {
 }
 
 int main() {
-    const int WINDOW_COLS = 20;
+    const int WINDOW_COLS = 24;
     const int WINDOW_ROWS = 25;
     const int CELL_SIZE = 32;
     const float HUD_HEIGHT = 64.f;
@@ -35,6 +35,7 @@ int main() {
 
     sf::Texture texPlayer, texBulletPlayer, texBulletEnemy, texBackground;
     sf::Texture texAlienTop, texAlienMid, texAlienBot, texShield;
+    sf::Texture texMenuBg; // menu background texture (new)
     sf::Font font;
     bool hasPlayerTex = texPlayer.loadFromFile("assets/textures/player.png");
     bool hasBulletPlayer = texBulletPlayer.loadFromFile("assets/textures/bullet.png");
@@ -44,6 +45,7 @@ int main() {
     bool hasAlienBot  = texAlienBot.loadFromFile("assets/textures/alien_bottom.png");
     bool hasBgTex     = texBackground.loadFromFile("assets/textures/background.png");
     bool hasShieldTex = texShield.loadFromFile("assets/textures/shield.png");
+    bool hasMenuBg    = texMenuBg.loadFromFile("assets/menu/menu_bg.png"); // load menu image
     bool hasFont      = font.openFromFile("assets/fonts/font.ttf");
 
     if (!hasPlayerTex)  std::cerr << "[WARN] No pudo cargar assets/textures/player.png\n";
@@ -54,6 +56,7 @@ int main() {
     if (!hasAlienBot)   std::cerr << "[WARN] No pudo cargar assets/textures/alien_bottom.png\n";
     if (!hasBgTex)      std::cerr << "[WARN] No pudo cargar assets/textures/background.png\n";
     if (!hasShieldTex)  std::cerr << "[WARN] No pudo cargar assets/textures/shield.png\n";
+    if (!hasMenuBg)     std::cerr << "[WARN] No pudo cargar assets/menu/menu_bg.png\n";
     if (!hasFont)       std::cerr << "[WARN] No pudo cargar assets/fonts/font.ttf\n";
 
     sf::SoundBuffer laserBuf;
@@ -76,8 +79,10 @@ int main() {
         }
     }
 
-    Menu menu(hasFont ? &font : nullptr, 36);
-    menu.setOptions({ "Play", "Exit" }, { static_cast<float>(windowWidth) / 2.f, 220.f }, 64.f);
+    // Menu: create with larger font size and centered options
+    Menu menu(hasFont ? &font : nullptr, 80); // increased character size to 80
+    if (hasMenuBg) menu.setBackground(&texMenuBg);
+    menu.setOptions({ "NEW GAME", "EXIT" }, { static_cast<float>(windowWidth) / 2.f, static_cast<float>(windowHeight) / 2.f }, 140.f);
 
     enum class AppState { Menu, Playing };
     AppState state = AppState::Menu;
@@ -105,8 +110,8 @@ int main() {
     const int ENEMY_ROWS = 5;
     const float formationStartX = MARGIN.x + 2.f * CELL_SIZE;
     const float formationStartY = MARGIN.y + HUD_HEIGHT + 1.f * CELL_SIZE;
-    const float spacingX = static_cast<float>(CELL_SIZE) * 1.35f;
-    const float spacingY = static_cast<float>(CELL_SIZE) * 1.10f;
+    const float spacingX = static_cast<float>(CELL_SIZE) * 1.65f;
+    const float spacingY = static_cast<float>(CELL_SIZE) * 1.15f;
 
     Formation formation(
         hasAlienTop ? &texAlienTop : nullptr,

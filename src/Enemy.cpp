@@ -2,8 +2,8 @@
 #include <memory>
 
 
-static constexpr float TARGET_ENEMY_W = 45.f;
-static constexpr float TARGET_ENEMY_H = 40.f;
+static constexpr float TARGET_ENEMY_W = 50.f;
+static constexpr float TARGET_ENEMY_H = 45.f;
 
 Enemy::Enemy(const sf::Texture* texture, const sf::Vector2f& startPos) {
     if (texture) {
