@@ -530,25 +530,48 @@ int main() {
             for (auto &b : enemyBullets) if (b.isActive()) b.draw(window);
             player.draw(window);
 
-            // After drawing the world, switch back to default view to draw HUD and menus anchored to the window
+                        // After drawing the world, switch back to default view to draw HUD and menus anchored to the window
             window.setView(window.getDefaultView());
 
-            // HUD (score / lives) - position based on current actual window size
+            // Grab current window size once (make it available to HUD and overlays)
             sf::Vector2u curSize = window.getSize();
-            if (scoreText) {
-                scoreText->setPosition(sf::Vector2f(MARGIN.x + 8.f, static_cast<float>(curSize.y) - MARGIN.y - scoreText->getGlobalBounds().size.y - 8.f));
-                window.draw(*scoreText);
-            }
-            if (livesText) {
-                float lw = livesText->getGlobalBounds().size.x;
-                float lh = livesText->getGlobalBounds().size.y;
-                livesText->setPosition(sf::Vector2f(static_cast<float>(curSize.x) - MARGIN.x - 8.f - lw, static_cast<float>(curSize.y) - MARGIN.y - lh - 8.f));
-                window.draw(*livesText);
-            }
 
-            // Draw music toggle button (upper-left)
+            // Draw music toggle button (upper-left) first so counters can be placed relative to it
             window.draw(musicBtn);
             if (musicIcon) window.draw(*musicIcon);
+
+            // HUD (score / lives) - position based on music button position (right side of the button)
+            {
+                // music button position/size
+                sf::Vector2f btnPos = musicBtn.getPosition();
+                sf::Vector2f btnSize = musicBtn.getSize();
+
+                const float paddingX = 12.f; // gap between button and first counter
+                const float spacing = 12.f;  // gap between score and lives
+                const float startX = btnPos.x + btnSize.x + paddingX;
+                const float centerY = btnPos.y + btnSize.y * 0.5f;
+
+                // Score text: left-aligned at startX, vertically centered to the music button
+                if (scoreText) {
+                    sf::FloatRect tb = scoreText->getLocalBounds();
+                    // set origin so text is vertically centered but left-aligned
+                    scoreText->setOrigin(sf::Vector2f{0.f, tb.position.y + tb.size.y * 0.5f});
+                    scoreText->setPosition(sf::Vector2f{startX, centerY});
+                    window.draw(*scoreText);
+                }
+
+                // Lives text: placed to the right of score text, keeping them side-by-side
+                float nextX = startX;
+                if (scoreText) {
+                    nextX += scoreText->getGlobalBounds().size.x + spacing;
+                }
+                if (livesText) {
+                    sf::FloatRect tb2 = livesText->getLocalBounds();
+                    livesText->setOrigin(sf::Vector2f{0.f, tb2.position.y + tb2.size.y * 0.5f});
+                    livesText->setPosition(sf::Vector2f{nextX, centerY});
+                    window.draw(*livesText);
+                }
+            }
 
             // Pause menu overlay
             if (paused && !pausedForResult) {
