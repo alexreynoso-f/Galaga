@@ -23,26 +23,24 @@ int main() {
     const int WINDOW_COLS = 20;
     const int WINDOW_ROWS = 25;
     const int CELL_SIZE = 32;
-    const float HUD_HEIGHT = 80.f;
+    const float HUD_HEIGHT = 64.f;
     const sf::Vector2f MARGIN{12.f, 12.f};
 
     unsigned int windowWidth = static_cast<unsigned int>(MARGIN.x * 2 + WINDOW_COLS * CELL_SIZE);
     unsigned int windowHeight = static_cast<unsigned int>(MARGIN.y + HUD_HEIGHT + WINDOW_ROWS * CELL_SIZE + MARGIN.y);
 
-    sf::RenderWindow window(sf::VideoMode({ windowWidth, windowHeight }), "Space");
+    sf::RenderWindow window(sf::VideoMode({ windowWidth, windowHeight }), "Naves");
     window.setVerticalSyncEnabled(true);
 
-    sf::Texture texPlayer, texEnemy, texBullet, texBackground;
-    sf::Font font;
+    sf::Texture texPlayer, texBullet, texBackground;
     sf::Texture texAlienTop, texAlienMid, texAlienBot;
-    bool hasAlienTop = texAlienTop.loadFromFile("assets/textures/alien_top.png");
-    bool hasAlienMid = texAlienMid.loadFromFile("assets/textures/alien_mid.png");
-    bool hasAlienBot = texAlienBot.loadFromFile("assets/textures/alien_bottom.png");
-
+    sf::Font font;
     bool hasPlayerTex = texPlayer.loadFromFile("assets/textures/player.png");
-    bool hasEnemyTex  = texEnemy.loadFromFile("assets/textures/alien_bottom.png");
-    bool hasBulletTex = texBullet.loadFromFile("assets/textures/bullet.png");
-    bool hasBgTex     = texBackground.loadFromFile("assets/textures/background_2.png");
+    bool hasAlienTop  = texAlienTop.loadFromFile("assets/textures/alien_top.png");
+    bool hasAlienMid  = texAlienMid.loadFromFile("assets/textures/alien_mid.png");
+    bool hasAlienBot  = texAlienBot.loadFromFile("assets/textures/alien_bottom.png");
+    bool hasBulletTex = texBullet.loadFromFile("assets/textures/bullet_2.png");
+    bool hasBgTex     = texBackground.loadFromFile("assets/textures/background.png");
     bool hasFont      = font.openFromFile("assets/fonts/font.ttf");
 
 
@@ -50,9 +48,9 @@ int main() {
     std::optional<sf::Sound> laserSound;
     if (laserBuf.loadFromFile("assets/sounds/laser_sound.mp3")) {
         laserSound.emplace(laserBuf);
-        std::cout << "Cargado sonido laser: assets/sounds/laser_sound.mp3\n";
+        std::cout << "[INFO] Cargado sonido laser: assets/sounds/laser_sound.mp3\n";
     } else {
-        std::cerr << "No se pudo cargar assets/sounds/laser_sound.mp3\n";
+        std::cerr << "[WARN] No se pudo cargar assets/sounds/laser_sound.mp3\n";
     }
 
     std::unique_ptr<sf::Sprite> bgSprite;
@@ -70,7 +68,7 @@ int main() {
     }
 
     Menu menu(hasFont ? &font : nullptr, 36);
-    menu.setOptions({ "Jugar", "Salir" }, { static_cast<float>(windowWidth) / 2.f, 220.f }, 64.f);
+    menu.setOptions({ "Play", "Exit" }, { static_cast<float>(windowWidth) / 2.f, 220.f }, 64.f);
 
     enum class AppState { Menu, Playing };
     AppState state = AppState::Menu;
@@ -95,30 +93,22 @@ int main() {
     const int ENEMY_ROWS = 5;
     const float formationStartX = MARGIN.x + 2.f * CELL_SIZE;
     const float formationStartY = MARGIN.y + HUD_HEIGHT + 1.f * CELL_SIZE;
-    const float spacingX = static_cast<float>(CELL_SIZE) * 1.5f;
-    const float spacingY = static_cast<float>(CELL_SIZE) * 1.15f;
+    const float spacingX = static_cast<float>(CELL_SIZE) * 1.60f;
+    const float spacingY = static_cast<float>(CELL_SIZE) * 1.20f;
 
     Formation formation(
-        hasAlienTop ? &texAlienTop : nullptr,
-        hasAlienMid ? &texAlienMid : nullptr,
-        hasAlienBot ? &texAlienBot : nullptr,
-        ENEMY_COLS, ENEMY_ROWS,
-        sf::Vector2f{ formationStartX, formationStartY },
-        spacingX, spacingY,
-        /*speed*/ 40.f, /*dropAmount*/ 18.f
+    hasAlienTop ? &texAlienTop : nullptr,
+    hasAlienMid ? &texAlienMid : nullptr,
+    hasAlienBot ? &texAlienBot : nullptr,
+    ENEMY_COLS, ENEMY_ROWS,
+    sf::Vector2f{ formationStartX, formationStartY },
+    spacingX, spacingY,
+    /*speed*/ 40.f, /*drop*/ 18.f
     );
-
-
-    auto resetGame = [&]() {
-        player.setPosition(playerStart);
-        formation.reset();
-        for (auto &b : bullets) b.deactivate();
-    };
-    resetGame();
 
     std::optional<sf::Text> scoreText;
     if (hasFont) {
-        scoreText.emplace(font, "Score: 0", 35);
+        scoreText.emplace(font, "Score: 0", 28);
         scoreText->setFillColor(sf::Color::White);
         scoreText->setPosition({ MARGIN.x + 8.f, MARGIN.y + 8.f });
     }
@@ -127,16 +117,27 @@ int main() {
     sf::Clock clock;
     float dt = 0.f;
 
-    // Helper: spawn bullet usando pool (comprueba laserSound antes de play)
-    auto spawnBulletFromPool = [&](const sf::Vector2f& pos, float speedY) {
+    const float SHOOT_COOLDOWN = 0.6f;
+    float shootTimer = 0.f;
+
+    auto spawnBulletFromPool = [&](const sf::Vector2f& pos, float speedY) -> bool {
         for (auto &b : bullets) {
             if (!b.isActive()) {
                 b.spawn(pos, speedY);
                 if (laserSound.has_value()) laserSound->play();
-                return;
+                return true;
             }
         }
+        return false;
     };
+
+    auto resetGame = [&]() {
+        player.setPosition(playerStart);
+        formation.reset();
+        for (auto &b : bullets) b.deactivate();
+    };
+
+    resetGame();
 
     while (window.isOpen()) {
         while (auto evOpt = window.pollEvent()) {
@@ -154,23 +155,9 @@ int main() {
                 }
             }
 
-            if (state == AppState::Menu) {
+            if (state == AppState::Menu) 
                 menu.processEvent(ev, window);
-            } else {
-                if (ev.is<sf::Event::KeyPressed>()) {
-                    const auto* k = ev.getIf<sf::Event::KeyPressed>();
-                    if (!k) continue;
-                    if (k->code == sf::Keyboard::Key::Space) {
-                        sf::FloatRect pb = player.bounds();
-                        sf::Vector2f bulletPos{ pb.position.x + pb.size.x / 2.f, pb.position.y - 6.f };
-                        spawnBulletFromPool(bulletPos, -480.f); // speedY negativo => sube
-                    } else if (k->code == sf::Keyboard::Key::R) {
-                        resetGame();
-                        score = 0;
-                        if (scoreText) scoreText->setString("Score: 0");
-                    }
-                }
-            }
+
         }
 
         dt = clock.restart().asSeconds();
@@ -190,6 +177,9 @@ int main() {
                 }
             }
         } else {
+            shootTimer -= dt;
+            if (shootTimer < 0.f) shootTimer = 0.f;
+
             if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Left) ||
                 sf::Keyboard::isKeyPressed(sf::Keyboard::Key::A)) {
                 player.moveLeft(dt);
@@ -198,9 +188,20 @@ int main() {
                 player.moveRight(dt);
             }
 
+            if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Space)) {
+                if (shootTimer <= 0.f) {
+                    sf::FloatRect pb = player.bounds();
+                    sf::Vector2f bulletPos{ pb.position.x + pb.size.x / 2.f, pb.position.y - 6.f };
+                    if (spawnBulletFromPool(bulletPos, -480.f)) {
+                        shootTimer = SHOOT_COOLDOWN;
+                    }
+                }
+            }
+
             player.update(dt);
             for (auto &b : bullets) b.update(dt);
             formation.update(dt, /*screenLeft=*/MARGIN.x, /*screenRight=*/ static_cast<float>(windowWidth) - MARGIN.x);
+
             for (auto &b : bullets) {
                 if (!b.isActive()) continue;
                 for (auto &e : formation.enemies()) {
@@ -210,7 +211,7 @@ int main() {
                         e.setActive(false);
                         score += 10;
                         if (scoreText) scoreText->setString("Score: " + std::to_string(score));
-                        break; // bala consumida -> pasar a la siguiente bala
+                        break;
                     }
                 }
             }
@@ -238,6 +239,7 @@ int main() {
                 if (b.isActive()) b.draw(window);
             }
             player.draw(window);
+
             if (scoreText) window.draw(*scoreText);
         }
 
