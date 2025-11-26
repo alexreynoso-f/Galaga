@@ -37,6 +37,8 @@ add_executable(Galaga
         src/Shield.cpp
         include/Shield.h
         include/Shield.h
+        src/Game.cpp
+        include/Game.h
 )
 
 # 🎵 Ruta para acceder a assets en runtime (NO COMPILA, solo referencia)
