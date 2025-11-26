@@ -116,8 +116,14 @@ void Menu::draw(sf::RenderWindow& window) const {
         }
     } else {
         // dark background fallback
-        sf::RectangleShape rect(sf::Vector2f(static_cast<float>(window.getSize().x), static_cast<float>(window.getSize().y)));
-        rect.setFillColor(sf::Color(8,8,12));
+        // Use mapPixelToCoords so the rectangle covers the full window regardless of the active view or viewport.
+        sf::Vector2i topLeftPixel{0, 0};
+        sf::Vector2i bottomRightPixel{ static_cast<int>(window.getSize().x), static_cast<int>(window.getSize().y) };
+        sf::Vector2f topLeft = window.mapPixelToCoords(topLeftPixel);
+        sf::Vector2f bottomRight = window.mapPixelToCoords(bottomRightPixel);
+        sf::RectangleShape rect(bottomRight - topLeft);
+        rect.setPosition(topLeft);
+        rect.setFillColor(sf::Color::Black);
         window.draw(rect);
     }
 

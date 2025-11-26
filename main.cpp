@@ -106,6 +106,9 @@ int main() {
         std::cerr << "[WARN] Could not load assets/music/bg_music.ogg. Music disabled.\n";
     }
 
+    // This flag remembers if music was playing when menu appeared (so we can resume it)
+    bool musicWasPlayingBeforeMenu = false;
+
     // UI: music toggle button (drawn in default view, upper-left)
     sf::RectangleShape musicBtn;
     musicBtn.setSize({48.f, 48.f});
@@ -123,10 +126,10 @@ int main() {
         auto rt = musicIcon->getLocalBounds();
         float ox = rt.position.x + rt.size.x * 0.5f;
         float oy = rt.position.y + rt.size.y * 0.5f;
-        musicIcon->setOrigin({ox, oy});
+        musicIcon->setOrigin(sf::Vector2f{ox, oy});
         sf::Vector2f bpos = musicBtn.getPosition();
         sf::Vector2f bsize = musicBtn.getSize();
-        musicIcon->setPosition({ bpos.x + bsize.x * 0.5f, bpos.y + bsize.y * 0.5f });
+        musicIcon->setPosition(sf::Vector2f{ bpos.x + bsize.x * 0.5f, bpos.y + bsize.y * 0.5f });
     }
 
     sf::SoundBuffer laserBuf;
@@ -315,33 +318,34 @@ int main() {
             if (ev.is<sf::Event::MouseButtonPressed>()) {
                 auto mb = ev.getIf<sf::Event::MouseButtonPressed>();
                 if (mb && mb->button == sf::Mouse::Button::Left) {
-                    // use current mouse position relative to the window (default view coordinates)
-                    sf::Vector2i pix = sf::Mouse::getPosition(window);
-                    sf::Vector2f mp = window.mapPixelToCoords(pix);
-                    // music button check (button drawn in default view region)
-                    if (musicBtn.getGlobalBounds().contains(mp)) {
-                        if (hasMusic) {
-                            if (musicOn) {
-                                bgMusic.pause();
-                                musicOn = false;
+                    // only allow toggling music while playing (no menus visible)
+                    if (state == AppState::Playing && !paused && !pausedForResult) {
+                        sf::Vector2i pix = sf::Mouse::getPosition(window);
+                        sf::Vector2f mp = window.mapPixelToCoords(pix);
+                        if (musicBtn.getGlobalBounds().contains(mp)) {
+                            if (hasMusic) {
+                                if (musicOn) {
+                                    bgMusic.pause();
+                                    musicOn = false;
+                                } else {
+                                    bgMusic.play();
+                                    musicOn = true;
+                                }
+                                if (musicIcon) {
+                                    musicIcon->setString(musicOn ? "Off" : "On");
+                                    auto rt = musicIcon->getLocalBounds();
+                                    float ox = rt.position.x + rt.size.x * 0.5f;
+                                    float oy = rt.position.y + rt.size.y * 0.5f;
+                                    musicIcon->setOrigin(sf::Vector2f{ox, oy});
+                                    sf::Vector2f bpos = musicBtn.getPosition();
+                                    sf::Vector2f bsize = musicBtn.getSize();
+                                    musicIcon->setPosition(sf::Vector2f{ bpos.x + bsize.x * 0.5f, bpos.y + bsize.y * 0.5f });
+                                }
                             } else {
-                                bgMusic.play();
-                                musicOn = true;
+                                // no music loaded: toggle visual state only
+                                musicOn = !musicOn;
+                                if (musicIcon) musicIcon->setString(musicOn ? "Off" : "On");
                             }
-                            if (musicIcon) {
-                                musicIcon->setString(musicOn ? "Off" : "On");
-                                auto rt = musicIcon->getLocalBounds();
-                                float ox = rt.position.x + rt.size.x * 0.5f;
-                                float oy = rt.position.y + rt.size.y * 0.5f;
-                                musicIcon->setOrigin({ox, oy});
-                                sf::Vector2f bpos = musicBtn.getPosition();
-                                sf::Vector2f bsize = musicBtn.getSize();
-                                musicIcon->setPosition({ bpos.x + bsize.x * 0.5f, bpos.y + bsize.y * 0.5f });
-                            }
-                        } else {
-                            // no music loaded: toggle visual state only
-                            musicOn = !musicOn;
-                            if (musicIcon) musicIcon->setString(musicOn ? "Off" : "On");
                         }
                     }
                 }
@@ -514,95 +518,121 @@ int main() {
             }
         }
 
+        // Decide whether a menu is visible (main menu, pause menu, or end-game overlay).
+        bool menuVisible = (state == AppState::Menu) || (state == AppState::Playing && (paused || pausedForResult));
+
+        // Music handling: pause music while menu visible, resume when returning to gameplay
+        if (hasMusic) {
+            auto status = bgMusic.getStatus();
+            if (menuVisible) {
+                // if it's playing now, remember and pause it
+                if (status == sf::SoundSource::Status::Playing) {
+                    musicWasPlayingBeforeMenu = true;
+                    bgMusic.pause();
+                }
+            } else {
+                // not menuVisible -> gameplay active; resume if it was playing before menu and user hasn't turned music off
+                if (musicWasPlayingBeforeMenu && musicOn) {
+                    bgMusic.play();
+                }
+                // reset the remembering flag
+                musicWasPlayingBeforeMenu = false;
+            }
+        }
+
         window.clear(sf::Color(18, 18, 28));
 
-        // Draw menu with default view (full-window)
+        // Render logic
         if (state == AppState::Menu) {
+            // Main menu: draw only the menu (default view)
             window.setView(window.getDefaultView());
+            // Draw a neutral background behind the menu so nothing below shows
+            sf::RectangleShape fullBg(sf::Vector2f(static_cast<float>(window.getSize().x), static_cast<float>(window.getSize().y)));
+            fullBg.setFillColor(sf::Color(8,8,12));
+            window.draw(fullBg);
             menu.draw(window);
-        } else {
-            // Draw game world using gameView (letterboxed / centered, capped width)
-            window.setView(gameView);
+        } else { // Playing
+            if (paused || pausedForResult) {
+                // Menu visible during gameplay: draw only the pause menu / overlay (no game world)
+                window.setView(window.getDefaultView());
+                // draw dark background so game objects aren't visible
+                sf::RectangleShape fullBg(sf::Vector2f(static_cast<float>(window.getSize().x), static_cast<float>(window.getSize().y)));
+                fullBg.setFillColor(sf::Color(0,0,0,200));
+                window.draw(fullBg);
 
-            for (auto &s : shields) s.draw(window);
-            formation->draw(window);
-            for (auto &b : bullets) if (b.isActive()) b.draw(window);
-            for (auto &b : enemyBullets) if (b.isActive()) b.draw(window);
-            player.draw(window);
-
-                        // After drawing the world, switch back to default view to draw HUD and menus anchored to the window
-            window.setView(window.getDefaultView());
-
-            // Grab current window size once (make it available to HUD and overlays)
-            sf::Vector2u curSize = window.getSize();
-
-            // Draw music toggle button (upper-left) first so counters can be placed relative to it
-            window.draw(musicBtn);
-            if (musicIcon) window.draw(*musicIcon);
-
-            // HUD (score / lives) - position based on music button position (right side of the button)
-            {
-                // music button position/size
-                sf::Vector2f btnPos = musicBtn.getPosition();
-                sf::Vector2f btnSize = musicBtn.getSize();
-
-                const float paddingX = 12.f; // gap between button and first counter
-                const float spacing = 12.f;  // gap between score and lives
-                const float startX = btnPos.x + btnSize.x + paddingX;
-                const float centerY = btnPos.y + btnSize.y * 0.5f;
-
-                // Score text: left-aligned at startX, vertically centered to the music button
-                if (scoreText) {
-                    sf::FloatRect tb = scoreText->getLocalBounds();
-                    // set origin so text is vertically centered but left-aligned
-                    scoreText->setOrigin(sf::Vector2f{0.f, tb.position.y + tb.size.y * 0.5f});
-                    scoreText->setPosition(sf::Vector2f{startX, centerY});
-                    window.draw(*scoreText);
+                if (paused && !pausedForResult) {
+                    // draw pause menu (only)
+                    pauseMenu.draw(window);
                 }
 
-                // Lives text: placed to the right of score text, keeping them side-by-side
-                float nextX = startX;
-                if (scoreText) {
-                    nextX += scoreText->getGlobalBounds().size.x + spacing;
+                if (pausedForResult) {
+                    // draw end-game centered overlay (only)
+                    if (hasFont && overlayTitle && overlaySub) {
+                        sf::Vector2u cur = window.getSize();
+                        sf::FloatRect rt = overlayTitle->getLocalBounds();
+                        float ox = rt.position.x + rt.size.x * 0.5f;
+                        float oy = rt.position.y + rt.size.y * 0.5f;
+                        overlayTitle->setOrigin(sf::Vector2f(ox, oy));
+                        overlayTitle->setPosition(sf::Vector2f(static_cast<float>(cur.x)/2.f, static_cast<float>(cur.y)/2.f - 24.f));
+
+                        sf::FloatRect rs = overlaySub->getLocalBounds();
+                        float sox = rs.position.x + rs.size.x * 0.5f;
+                        float soy = rs.position.y + rs.size.y * 0.5f;
+                        overlaySub->setOrigin(sf::Vector2f(sox, soy));
+                        overlaySub->setPosition(sf::Vector2f(static_cast<float>(cur.x)/2.f, static_cast<float>(cur.y)/2.f + 40.f));
+
+                        window.draw(*overlayTitle);
+                        window.draw(*overlaySub);
+                    }
                 }
-                if (livesText) {
-                    sf::FloatRect tb2 = livesText->getLocalBounds();
-                    livesText->setOrigin(sf::Vector2f{0.f, tb2.position.y + tb2.size.y * 0.5f});
-                    livesText->setPosition(sf::Vector2f{nextX, centerY});
-                    window.draw(*livesText);
-                }
-            }
+            } else {
+                // Normal gameplay: draw the game world (letterboxed) then HUD and music button
+                window.setView(gameView);
 
-            // Pause menu overlay
-            if (paused && !pausedForResult) {
-                sf::RectangleShape overlay(sf::Vector2f(static_cast<float>(curSize.x), static_cast<float>(curSize.y)));
-                overlay.setFillColor(sf::Color(0,0,0,160));
-                window.draw(overlay);
-                pauseMenu.draw(window);
-            }
+                for (auto &s : shields) s.draw(window);
+                formation->draw(window);
+                for (auto &b : bullets) if (b.isActive()) b.draw(window);
+                for (auto &b : enemyBullets) if (b.isActive()) b.draw(window);
+                player.draw(window);
 
-            // End-game overlay (centered, placed now according to the actual window size)
-            if (pausedForResult) {
-                sf::Vector2u cur = window.getSize();
-                sf::RectangleShape overlay(sf::Vector2f(static_cast<float>(cur.x), static_cast<float>(cur.y)));
-                overlay.setFillColor(sf::Color(0,0,0,160));
-                window.draw(overlay);
-                if (hasFont && overlayTitle && overlaySub) {
-                    // center texts on the actual window
-                    sf::FloatRect rt = overlayTitle->getLocalBounds();
-                    float ox = rt.position.x + rt.size.x * 0.5f;
-                    float oy = rt.position.y + rt.size.y * 0.5f;
-                    overlayTitle->setOrigin(sf::Vector2f(ox, oy));
-                    overlayTitle->setPosition(sf::Vector2f(static_cast<float>(cur.x)/2.f, static_cast<float>(cur.y)/2.f - 24.f));
+                // After drawing the world, switch back to default view to draw HUD and menus anchored to the window
+                window.setView(window.getDefaultView());
 
-                    sf::FloatRect rs = overlaySub->getLocalBounds();
-                    float sox = rs.position.x + rs.size.x * 0.5f;
-                    float soy = rs.position.y + rs.size.y * 0.5f;
-                    overlaySub->setOrigin(sf::Vector2f(sox, soy));
-                    overlaySub->setPosition(sf::Vector2f(static_cast<float>(cur.x)/2.f, static_cast<float>(cur.y)/2.f + 40.f));
+                // HUD (score / lives) - position based on music button position (right side of the button)
+                // Draw music toggle button (upper-left) first so counters can be placed relative to it
+                window.draw(musicBtn);
+                if (musicIcon) window.draw(*musicIcon);
 
-                    window.draw(*overlayTitle);
-                    window.draw(*overlaySub);
+                // place counters to the right of the music button, vertically centered to it
+                {
+                    // music button position/size
+                    sf::Vector2f btnPos = musicBtn.getPosition();
+                    sf::Vector2f btnSize = musicBtn.getSize();
+
+                    const float paddingX = 12.f; // gap between button and first counter
+                    const float spacing = 12.f;  // gap between score and lives
+                    const float startX = btnPos.x + btnSize.x + paddingX;
+                    const float centerY = btnPos.y + btnSize.y * 0.5f;
+
+                    // Score text: left-aligned at startX, vertically centered to the music button
+                    if (scoreText) {
+                        sf::FloatRect tb = scoreText->getLocalBounds();
+                        scoreText->setOrigin(sf::Vector2f{0.f, tb.position.y + tb.size.y * 0.5f});
+                        scoreText->setPosition(sf::Vector2f{startX, centerY});
+                        window.draw(*scoreText);
+                    }
+
+                    // Lives text: placed to the right of score text, keeping them side-by-side
+                    float nextX = startX;
+                    if (scoreText) {
+                        nextX += scoreText->getGlobalBounds().size.x + spacing;
+                    }
+                    if (livesText) {
+                        sf::FloatRect tb2 = livesText->getLocalBounds();
+                        livesText->setOrigin(sf::Vector2f{0.f, tb2.position.y + tb2.size.y * 0.5f});
+                        livesText->setPosition(sf::Vector2f{nextX, centerY});
+                        window.draw(*livesText);
+                    }
                 }
             }
         }
