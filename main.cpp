@@ -566,20 +566,35 @@ int main() {
                 }
 
                 if (pausedForResult) {
-                    // draw end-game centered overlay (only)
+                    // Draw a full-window semi-transparent overlay using pixel->world conversion so it covers
+                    // the entire window regardless of the active view/viewport (letterboxing).
+                    sf::Vector2i topLeftPixel{ 0, 0 };
+                    sf::Vector2i bottomRightPixel{ static_cast<int>(window.getSize().x), static_cast<int>(window.getSize().y) };
+                    sf::Vector2f topLeft = window.mapPixelToCoords(topLeftPixel);
+                    sf::Vector2f bottomRight = window.mapPixelToCoords(bottomRightPixel);
+
+                    sf::RectangleShape overlayRect(bottomRight - topLeft);
+                    overlayRect.setPosition(topLeft);
+                    overlayRect.setFillColor(sf::Color(0, 0, 0, 200)); // semi-transparent black
+                    window.draw(overlayRect);
+
+                    // Draw centered title/sub text using the center in pixel coords converted to world coords.
                     if (hasFont && overlayTitle && overlaySub) {
-                        sf::Vector2u cur = window.getSize();
+                        // center in pixel coords -> convert to world coords so positioning matches the overlay
+                        sf::Vector2f centerWorld = window.mapPixelToCoords({ static_cast<int>(window.getSize().x / 2),
+                                                                             static_cast<int>(window.getSize().y / 2) });
+
                         sf::FloatRect rt = overlayTitle->getLocalBounds();
                         float ox = rt.position.x + rt.size.x * 0.5f;
                         float oy = rt.position.y + rt.size.y * 0.5f;
                         overlayTitle->setOrigin(sf::Vector2f(ox, oy));
-                        overlayTitle->setPosition(sf::Vector2f(static_cast<float>(cur.x)/2.f, static_cast<float>(cur.y)/2.f - 24.f));
+                        overlayTitle->setPosition(sf::Vector2f(centerWorld.x, centerWorld.y - 24.f));
 
                         sf::FloatRect rs = overlaySub->getLocalBounds();
                         float sox = rs.position.x + rs.size.x * 0.5f;
                         float soy = rs.position.y + rs.size.y * 0.5f;
                         overlaySub->setOrigin(sf::Vector2f(sox, soy));
-                        overlaySub->setPosition(sf::Vector2f(static_cast<float>(cur.x)/2.f, static_cast<float>(cur.y)/2.f + 40.f));
+                        overlaySub->setPosition(sf::Vector2f(centerWorld.x, centerWorld.y + 40.f));
 
                         window.draw(*overlayTitle);
                         window.draw(*overlaySub);
