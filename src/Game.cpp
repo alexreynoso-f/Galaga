@@ -5,6 +5,7 @@
 #include "Bullet.h"
 #include "Shield.h"
 #include <iostream>
+#include <string>
 #include <algorithm>
 
 Game::Game(unsigned int windowWidth, unsigned int windowHeight)
@@ -22,7 +23,10 @@ Game::Game(unsigned int windowWidth, unsigned int windowHeight)
                                 MARGIN_.y + HUD_HEIGHT + (WINDOW_ROWS * CELL_SIZE) - CELL_SIZE * 1.5f);
 }
 
-Game::~Game() = default;
+Game::~Game() {
+    delete menu_;
+    delete pauseMenu_;
+}
 
 bool Game::loadAssets() {
     bool ok = true;
@@ -51,10 +55,10 @@ bool Game::init() {
 
     if (bgMusic_.openFromFile("assets/music/bg_music.ogg")) { bgMusic_.setLooping(true); bgMusic_.play(); musicOn_ = true; }
 
-    menu_ = std::make_unique<Menu>(hasFont_ ? &font_ : nullptr, 80);
+    menu_ = new Menu(hasFont_ ? &font_ : nullptr, 80);
     menu_->setOptions({ "NEW GAME", "EXIT" }, { static_cast<float>(VIRTUAL_WIDTH_) / 2.f, static_cast<float>(VIRTUAL_HEIGHT_) / 2.f }, 140.f);
 
-    pauseMenu_ = std::make_unique<Menu>(hasFont_ ? &font_ : nullptr, 56);
+    pauseMenu_ = new Menu(hasFont_ ? &font_ : nullptr, 56);
     pauseMenu_->setOptions({ "RESUME", "RESTART", "EXIT TO MENU" }, { static_cast<float>(VIRTUAL_WIDTH_) / 2.f, static_cast<float>(VIRTUAL_HEIGHT_) / 2.f }, 96.f);
 
     musicBtn_.setSize({48.f, 48.f});
@@ -95,9 +99,9 @@ bool Game::init() {
     formation_ = createFormation();
 
     // prepare explosion sounds pool
+    explosionSounds_.clear();
     if (explosionLoaded_) {
         const size_t POOL_SIZE = 8;
-        explosionSounds_.clear();
         explosionSounds_.reserve(POOL_SIZE);
         for (size_t i = 0; i < POOL_SIZE; ++i) explosionSounds_.emplace_back(explosionBuf_);
         explosionSoundIndex_ = 0;
@@ -257,6 +261,8 @@ void Game::handleEvents() {
             window_.setView(prev);
             continue;
         }
+
+        // no further in-game event handling needed here (realtime input handled in update)
     }
 }
 
@@ -316,11 +322,14 @@ void Game::update(float dt) {
             if (rectsIntersect(b.bounds(), e.bounds())) {
                 b.deactivate();
                 e.setActive(false);
+
+                // play explosion sound
                 if (explosionLoaded_ && !explosionSounds_.empty()) {
                     explosionSounds_[explosionSoundIndex_].setBuffer(explosionBuf_);
                     explosionSounds_[explosionSoundIndex_].play();
                     explosionSoundIndex_ = (explosionSoundIndex_ + 1) % explosionSounds_.size();
                 }
+
                 score_ += 10;
                 if (scoreText_) scoreText_->setString("Score: " + std::to_string(score_));
                 break;
@@ -369,9 +378,10 @@ void Game::update(float dt) {
         if (overlaySub_) overlaySub_->setString("Press ENTER to restart");
     }
 
+    // music handling: pause/resume depending on menu visibility
     bool menuVisible = (state_ == AppState::Menu) || (state_ == AppState::Playing && (paused_ || pausedForResult_));
     if (bgMusic_.getStatus() == sf::SoundSource::Status::Playing) {
-        if (menuVisible && !musicWasPlayingBeforeMenu_) {
+        if (menuVisible && musicWasPlayingBeforeMenu_ == false) {
             musicWasPlayingBeforeMenu_ = true;
             bgMusic_.pause();
         }
@@ -384,18 +394,19 @@ void Game::update(float dt) {
 }
 
 void Game::render() {
-    window_.clear(sf::Color::Black);
+    window_.clear(sf::Color(18,18,28));
 
     if (state_ == AppState::Menu) {
         window_.setView(window_.getDefaultView());
         sf::RectangleShape fullBg(sf::Vector2f(static_cast<float>(window_.getSize().x), static_cast<float>(window_.getSize().y)));
-        fullBg.setFillColor(sf::Color::Black);
+        fullBg.setFillColor(sf::Color(8,8,12));
         window_.draw(fullBg);
         if (menu_) menu_->draw(window_);
         window_.display();
         return;
     }
 
+    // If a menu is visible (pause or end-game), draw only default-view overlay as in original main
     if (paused_ || pausedForResult_) {
         window_.setView(window_.getDefaultView());
         sf::RectangleShape fullBg(sf::Vector2f(static_cast<float>(window_.getSize().x), static_cast<float>(window_.getSize().y)));
@@ -407,31 +418,19 @@ void Game::render() {
         }
 
         if (pausedForResult_) {
-            sf::Vector2i topLeftPixel{ 0, 0 };
-            sf::Vector2i bottomRightPixel{ static_cast<int>(window_.getSize().x), static_cast<int>(window_.getSize().y) };
-            sf::Vector2f topLeft = window_.mapPixelToCoords(topLeftPixel);
-            sf::Vector2f bottomRight = window_.mapPixelToCoords(bottomRightPixel);
-
-            sf::RectangleShape overlayRect(bottomRight - topLeft);
-            overlayRect.setPosition(topLeft);
-            overlayRect.setFillColor(sf::Color(0, 0, 0, 200));
-            window_.draw(overlayRect);
-
             if (hasFont_ && overlayTitle_ && overlaySub_) {
-                sf::Vector2f centerWorld = window_.mapPixelToCoords({ static_cast<int>(window_.getSize().x / 2),
-                                                                      static_cast<int>(window_.getSize().y / 2) });
-
+                sf::Vector2u cur = window_.getSize();
                 sf::FloatRect rt = overlayTitle_->getLocalBounds();
                 float ox = rt.position.x + rt.size.x * 0.5f;
                 float oy = rt.position.y + rt.size.y * 0.5f;
                 overlayTitle_->setOrigin(sf::Vector2f(ox, oy));
-                overlayTitle_->setPosition(sf::Vector2f(centerWorld.x, centerWorld.y - 24.f));
+                overlayTitle_->setPosition(sf::Vector2f(static_cast<float>(cur.x)/2.f, static_cast<float>(cur.y)/2.f - 24.f));
 
                 sf::FloatRect rs = overlaySub_->getLocalBounds();
                 float sox = rs.position.x + rs.size.x * 0.5f;
                 float soy = rs.position.y + rs.size.y * 0.5f;
                 overlaySub_->setOrigin(sf::Vector2f(sox, soy));
-                overlaySub_->setPosition(sf::Vector2f(centerWorld.x, centerWorld.y + 40.f));
+                overlaySub_->setPosition(sf::Vector2f(static_cast<float>(cur.x)/2.f, static_cast<float>(cur.y)/2.f + 40.f));
 
                 window_.draw(*overlayTitle_);
                 window_.draw(*overlaySub_);
@@ -442,6 +441,7 @@ void Game::render() {
         return;
     }
 
+    // Normal gameplay rendering
     window_.setView(gameView_);
     for (auto &s : shields_) s.draw(window_);
     if (formation_) formation_->draw(window_);
@@ -452,9 +452,11 @@ void Game::render() {
     window_.setView(window_.getDefaultView());
     sf::Vector2u curSize = window_.getSize();
 
+    // Draw music button + icon
     window_.draw(musicBtn_);
     if (musicIcon_) window_.draw(*musicIcon_);
 
+    // Draw score and lives to the right of music button
     {
         sf::Vector2f btnPos = musicBtn_.getPosition();
         sf::Vector2f btnSize = musicBtn_.getSize();
@@ -480,6 +482,7 @@ void Game::render() {
         }
     }
 
+    // Pause overlay/menu if needed (draw above HUD)
     if (paused_ && !pausedForResult_) {
         sf::RectangleShape overlay(sf::Vector2f(static_cast<float>(curSize.x), static_cast<float>(curSize.y)));
         overlay.setFillColor(sf::Color(0,0,0,160));

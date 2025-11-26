@@ -40,8 +40,8 @@ private:
     size_t explosionSoundIndex_ = 0;
 
     // UI / menus
-    std::unique_ptr<class Menu> menu_;
-    std::unique_ptr<class Menu> pauseMenu_;
+    class Menu* menu_ = nullptr;
+    class Menu* pauseMenu_ = nullptr;
 
     // game objects
     std::unique_ptr<class Formation> formation_;
@@ -72,7 +72,7 @@ private:
     sf::Clock clock_;
     float shootTimer_ = 0.f;
     const float SHOOT_COOLDOWN = 0.6f;
-    const int SHIELD_HP = 5;
+    const int SHIELD_HP = 9;
 
     // RNG & enemy shooting
     std::mt19937 rng_;
