@@ -540,22 +540,23 @@ int main() {
             }
         }
 
-        window.clear(sf::Color(18, 18, 28));
+        // always clear to solid black so letterbox bars and background are pure black
+        window.clear(sf::Color::Black);
 
         // Render logic
         if (state == AppState::Menu) {
             // Main menu: draw only the menu (default view)
             window.setView(window.getDefaultView());
-            // Draw a neutral background behind the menu so nothing below shows
+            // Draw a neutral background behind the menu so nothing below shows (make it pure black)
             sf::RectangleShape fullBg(sf::Vector2f(static_cast<float>(window.getSize().x), static_cast<float>(window.getSize().y)));
-            fullBg.setFillColor(sf::Color(8,8,12));
+            fullBg.setFillColor(sf::Color::Black);
             window.draw(fullBg);
             menu.draw(window);
         } else { // Playing
             if (paused || pausedForResult) {
                 // Menu visible during gameplay: draw only the pause menu / overlay (no game world)
                 window.setView(window.getDefaultView());
-                // draw dark background so game objects aren't visible
+                // draw dark background so game objects aren't visible (semi-transparent overlay retained)
                 sf::RectangleShape fullBg(sf::Vector2f(static_cast<float>(window.getSize().x), static_cast<float>(window.getSize().y)));
                 fullBg.setFillColor(sf::Color(0,0,0,200));
                 window.draw(fullBg);
