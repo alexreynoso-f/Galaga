@@ -1,0 +1,24 @@
+# Build directory
+build/
+
+# IDE directories
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Compiled binaries
+*.exe
+*.out
+Galaga
+
+# CMake generated files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+
+# OS specific
+.DS_Store
+Thumbs.db
+_codeql_detected_source_root
